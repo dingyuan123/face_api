@@ -1,0 +1,61 @@
+from django.urls import path
+
+from backend.scheduling.api.views import (
+    ProviderAvailabilityView,
+    ProviderScheduleBulkUpdateView,
+    ProviderScheduleCalendarView,
+    ProviderScheduleDayView,
+    ProviderScheduleRuleDeleteView,
+    ProviderScheduleRuleView,
+    ProviderScheduleSlotDeleteView,
+    ProviderScheduleSlotStatusView,
+    ProviderScheduleSlotsView,
+)
+
+urlpatterns = [
+    path(
+        "provider-schedule/rules/",
+        ProviderScheduleRuleView.as_view(),
+        name="provider-schedule-rules",
+    ),
+    path(
+        "provider-schedule/rules/<int:rule_id>/",
+        ProviderScheduleRuleDeleteView.as_view(),
+        name="provider-schedule-rule-delete",
+    ),
+    path(
+        "provider-schedule/calendar/",
+        ProviderScheduleCalendarView.as_view(),
+        name="provider-schedule-calendar",
+    ),
+    path(
+        "provider-schedule/calendar/<str:day>/",
+        ProviderScheduleDayView.as_view(),
+        name="provider-schedule-day",
+    ),
+    path(
+        "provider-schedule/bulk-update/",
+        ProviderScheduleBulkUpdateView.as_view(),
+        name="provider-schedule-bulk-update",
+    ),
+    path(
+        "provider-schedule-slots/<uuid:slot_id>/status/",
+        ProviderScheduleSlotStatusView.as_view(),
+        name="provider-schedule-slot-status",
+    ),
+    path(
+        "provider-schedule-slots/",
+        ProviderScheduleSlotsView.as_view(),
+        name="provider-schedule-slots",
+    ),
+    path(
+        "provider-schedule-slots/<uuid:slot_id>/",
+        ProviderScheduleSlotDeleteView.as_view(),
+        name="provider-schedule-slot-delete",
+    ),
+    path(
+        "providers/<uuid:provider_public_id>/availability/",
+        ProviderAvailabilityView.as_view(),
+        name="provider-availability",
+    ),
+]

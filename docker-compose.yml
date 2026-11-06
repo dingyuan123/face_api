@@ -1,0 +1,97 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jianmianliao}
+      POSTGRES_USER: ${POSTGRES_USER:-jianmianliao}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-development-password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-jianmianliao} -d ${POSTGRES_DB:-jianmianliao}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: .
+    environment:
+      DJANGO_ENV: ${DJANGO_ENV:-development}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-true}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-docker-compose-development-secret-change-me}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
+      POSTGRES_DB: ${POSTGRES_DB:-jianmianliao}
+      POSTGRES_USER: ${POSTGRES_USER:-jianmianliao}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-development-password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+      MEDIA_ROOT: /app/var/media
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+      gunicorn backend.config.wsgi:application --bind 0.0.0.0:8000 --workers 2"
+    ports:
+      - "8000:8000"
+    volumes:
+      - media_data:/app/var/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live/', timeout=2)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    build: .
+    environment:
+      DJANGO_ENV: ${DJANGO_ENV:-development}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-docker-compose-development-secret-change-me}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,web}
+      POSTGRES_DB: ${POSTGRES_DB:-jianmianliao}
+      POSTGRES_USER: ${POSTGRES_USER:-jianmianliao}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-development-password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+      MEDIA_ROOT: /app/var/media
+    command: celery -A backend.config worker --loglevel=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - media_data:/app/var/media
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:

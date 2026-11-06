@@ -1,0 +1,25 @@
+[project]
+name = "jianmianliao-backend"
+version = "0.1.0"
+description = "Modular Django REST backend foundation for Jianmianliao"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+ignore = ["E501", "RUF001", "RUF002"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/*/migrations/*.py" = ["I001", "RUF012"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+

@@ -1,0 +1,85 @@
+from django.urls import path
+
+from backend.catalog.api.views import (
+    AdminProviderServiceApproveView,
+    AdminProviderServiceDetailView,
+    AdminProviderServiceListView,
+    AdminProviderServiceRejectView,
+    ProviderServiceDetailView,
+    ProviderServiceListCreateView,
+    ProviderServiceOfflineView,
+    ProviderServiceOnlineView,
+    ProviderServiceSubmitReviewView,
+    ProviderTagOptionsView,
+    PublicServiceDetailView,
+    ServiceCategoryOptionsView,
+    ServiceTagOptionsView,
+)
+
+urlpatterns = [
+    path(
+        "services/<uuid:service_id>/",
+        PublicServiceDetailView.as_view(),
+        name="public-service-detail",
+    ),
+    path(
+        "provider-options/service-categories/",
+        ServiceCategoryOptionsView.as_view(),
+        name="provider-service-categories",
+    ),
+    path(
+        "provider-options/service-tags/",
+        ServiceTagOptionsView.as_view(),
+        name="provider-service-tags",
+    ),
+    path(
+        "provider-options/provider-tags/",
+        ProviderTagOptionsView.as_view(),
+        name="provider-profile-tags",
+    ),
+    path(
+        "provider-services/",
+        ProviderServiceListCreateView.as_view(),
+        name="provider-services",
+    ),
+    path(
+        "provider-services/<uuid:service_id>/",
+        ProviderServiceDetailView.as_view(),
+        name="provider-service-detail",
+    ),
+    path(
+        "provider-services/<uuid:service_id>/submit-review/",
+        ProviderServiceSubmitReviewView.as_view(),
+        name="provider-service-submit-review",
+    ),
+    path(
+        "provider-services/<uuid:service_id>/online/",
+        ProviderServiceOnlineView.as_view(),
+        name="provider-service-online",
+    ),
+    path(
+        "provider-services/<uuid:service_id>/offline/",
+        ProviderServiceOfflineView.as_view(),
+        name="provider-service-offline",
+    ),
+    path(
+        "admin/provider-services/",
+        AdminProviderServiceListView.as_view(),
+        name="admin-provider-services",
+    ),
+    path(
+        "admin/provider-services/<uuid:service_id>/",
+        AdminProviderServiceDetailView.as_view(),
+        name="admin-provider-service-detail",
+    ),
+    path(
+        "admin/provider-services/<uuid:service_id>/approve/",
+        AdminProviderServiceApproveView.as_view(),
+        name="admin-provider-service-approve",
+    ),
+    path(
+        "admin/provider-services/<uuid:service_id>/reject/",
+        AdminProviderServiceRejectView.as_view(),
+        name="admin-provider-service-reject",
+    ),
+]
