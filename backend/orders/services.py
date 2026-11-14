@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
@@ -20,16 +21,26 @@ from backend.common.context import current_trace_id
 from backend.common.crypto import decrypt_text, sensitive_fingerprint
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
+from backend.locations.services import decode_location_selection_token
 from backend.media.services import get_media_payloads
 from backend.orders.models import Order, OrderRefundRequest, OrderScheduleSlot, OrderStatusLog
-from backend.payments.models import Payment
+from backend.payments.models import Payment, Refund
 from backend.payments.services import (
     charge_wallet_for_order,
+    create_external_payment,
+    execute_refund,
     payment_payload,
     refund_wallet_for_payment,
+    register_refund,
 )
 from backend.payouts.services import create_provider_order_earning
+from backend.providers.analytics import record_provider_event
 from backend.providers.profile_services import get_provider_avatar_media_id
+from backend.referrals.reward_services import (
+    apply_refund_to_referral_reward,
+    create_order_referral_snapshot,
+    create_referral_reward_for_completed_order,
+)
 from backend.reviews.models import Review
 from backend.scheduling.models import ScheduleSlot
 from backend.wallets.services import get_wallet_available_amount
@@ -79,11 +90,20 @@ def _booking_amount(service: ProviderService) -> tuple[int, int]:
     return booking_unit_count, service.price_amount_minor * booking_unit_count
 
 
+def _platform_commission_amount(amount_minor: int) -> int:
+    """按服务者佣金比例计算平台抽佣，不增加用户应付金额。"""
+    return max(
+        0,
+        int(amount_minor) * settings.PROVIDER_PLATFORM_COMMISSION_RATE_BPS // 10000,
+    )
+
+
 def quote_order(
     *,
     user: User,
     service_id: str,
     slot_id: str,
+    location_selection_token: str | None = None,
 ) -> dict[str, Any]:
     """计算下单前金额并返回下单所需服务和时段版本。"""
 
@@ -129,6 +149,11 @@ def quote_order(
     ).count()
     if available_count != booking_unit_count:
         raise _invalid("slot_id", "连续可预约时段不足，无法完成该时长服务")
+    meeting_location = (
+        decode_location_selection_token(location_selection_token)
+        if location_selection_token
+        else None
+    )
     return {
         "pricing_unit": "HOUR",
         "currency": service.currency,
@@ -137,6 +162,7 @@ def quote_order(
         "original_amount_minor": original_amount_minor,
         "discount_amount_minor": 0,
         "platform_fee_amount_minor": 0,
+        "platform_commission_amount_minor": _platform_commission_amount(original_amount_minor),
         "payable_amount_minor": original_amount_minor,
         "payable_display": format_price_amount(
             original_amount_minor,
@@ -154,7 +180,29 @@ def quote_order(
             }
         ],
         "discounts": [],
+        "meeting_location": _selection_location_payload(meeting_location)
+        if meeting_location
+        else None,
         "quoted_at": timezone.now(),
+    }
+
+
+def _selection_location_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """将短期地点凭证内容转换成订单地点响应结构。"""
+
+    return {
+        "poi_id": payload.get("provider_poi_id", ""),
+        "name": payload.get("name", ""),
+        "address": payload.get("address", ""),
+        "province": payload.get("province", ""),
+        "city": payload.get("city", ""),
+        "district": payload.get("district", ""),
+        "latitude": payload.get("latitude"),
+        "longitude": payload.get("longitude"),
+        "category_code": payload.get("category_code", ""),
+        "source": "TENCENT_MAP",
+        "policy_version": payload.get("policy_version", ""),
+        "selected_at": timezone.now(),
     }
 
 
@@ -288,6 +336,35 @@ def _order_participants_payload(
             "completed_order_count": completed_order_count,
             "verification": identity_statuses,
         },
+    }
+
+
+def _meeting_location_payload(order: Order) -> dict[str, Any] | None:
+    """返回订单参与人可见的见面地点快照，不包含用户当前位置。"""
+
+    if not order.meeting_location_name and not order.meeting_location_address:
+        return None
+    return {
+        "poi_id": order.meeting_location_poi_id,
+        "name": order.meeting_location_name,
+        "address": order.meeting_location_address,
+        "province": order.meeting_location_province,
+        "city": order.meeting_location_city,
+        "district": order.meeting_location_district,
+        "latitude": (
+            float(order.meeting_location_latitude)
+            if order.meeting_location_latitude is not None
+            else None
+        ),
+        "longitude": (
+            float(order.meeting_location_longitude)
+            if order.meeting_location_longitude is not None
+            else None
+        ),
+        "category_code": order.meeting_location_category_code,
+        "source": order.meeting_location_source,
+        "policy_version": order.meeting_location_policy_version,
+        "selected_at": order.meeting_location_selected_at,
     }
 
 
@@ -539,6 +616,7 @@ def order_payload(
         "provider_public_id": str(order.provider_user.public_id),
         "service": _order_service_payload(order, request),
         "schedule_slot": order.slot_snapshot,
+        "meeting_location": _meeting_location_payload(order),
         "participants": _order_participants_payload(order, request),
         "contact": _contact_payload(order, effective_viewer),
         "progress": _order_progress_payload(order, effective_viewer),
@@ -547,6 +625,7 @@ def order_payload(
             "original_amount_minor": order.original_price_amount_minor,
             "discount_amount_minor": order.discount_amount_minor,
             "platform_fee_amount_minor": order.platform_fee_amount_minor,
+            "platform_commission_amount_minor": order.platform_commission_amount_minor,
             "payable_amount_minor": order.payable_amount_minor,
             "paid_amount_minor": order.paid_amount_minor,
             "refunded_amount_minor": order.refunded_amount_minor,
@@ -570,6 +649,7 @@ def create_order(
     note: str,
     expected_service_version: int,
     expected_slot_version: int,
+    location_selection_token: str | None = None,
     idempotency_key: str | None = None,
 ) -> OrderResult:
     """创建待支付订单并锁定预约时段。"""
@@ -583,7 +663,13 @@ def create_order(
             "note": note.strip(),
             "expected_service_version": expected_service_version,
             "expected_slot_version": expected_slot_version,
+            "location_selection_token": location_selection_token or "",
         }
+    )
+    meeting_location = (
+        decode_location_selection_token(location_selection_token)
+        if location_selection_token
+        else {}
     )
     try:
         with transaction.atomic():
@@ -719,8 +805,31 @@ def create_order(
                     "version": anchor_slot.version,
                 },
                 original_price_amount_minor=original_amount_minor,
+                platform_commission_amount_minor=_platform_commission_amount(original_amount_minor),
                 payable_amount_minor=original_amount_minor,
                 note=note.strip(),
+                meeting_location_poi_id=str(meeting_location.get("provider_poi_id", ""))[:255],
+                meeting_location_name=str(meeting_location.get("name", ""))[:200],
+                meeting_location_address=str(meeting_location.get("address", ""))[:500],
+                meeting_location_province=str(meeting_location.get("province", ""))[:100],
+                meeting_location_city=str(meeting_location.get("city", ""))[:100],
+                meeting_location_district=str(meeting_location.get("district", ""))[:100],
+                meeting_location_latitude=(
+                    Decimal(str(meeting_location["latitude"]))
+                    if meeting_location.get("latitude") is not None
+                    else None
+                ),
+                meeting_location_longitude=(
+                    Decimal(str(meeting_location["longitude"]))
+                    if meeting_location.get("longitude") is not None
+                    else None
+                ),
+                meeting_location_category_code=str(meeting_location.get("category_code", ""))[:100],
+                meeting_location_source="TENCENT_MAP" if meeting_location else "",
+                meeting_location_policy_version=str(meeting_location.get("policy_version", ""))[
+                    :64
+                ],
+                meeting_location_selected_at=(timezone.now() if meeting_location else None),
                 idempotency_key=normalized_key,
                 request_fingerprint=fingerprint,
             )
@@ -792,10 +901,12 @@ def pay_order(
     user: User,
     order_no: str,
     expected_version: int,
+    payment_method: str = Payment.Method.BALANCE,
     idempotency_key: str | None = None,
 ) -> dict[str, Any]:
-    """使用钱包余额支付订单并推进到待接单。"""
-
+    """发起余额、微信 App 或支付宝 App 支付并返回客户端支付参数。"""
+    if payment_method not in Payment.Method.values:
+        raise _invalid("payment_method", "不支持的支付方式")
     with transaction.atomic():
         order = (
             Order.objects.select_for_update(of=("self",))
@@ -822,6 +933,7 @@ def pay_order(
             return {
                 "order": order_payload(order),
                 "payment": payment_payload(payment) if payment else None,
+                "payment_action": "NONE",
                 "reused": True,
             }
         if order.status != Order.Status.PENDING_PAYMENT:
@@ -830,53 +942,120 @@ def pay_order(
                 ERROR_MESSAGES[ErrorCode.ORDER_STATE_INVALID],
                 status_code=409,
             )
-        available_amount_minor = get_wallet_available_amount(user)
-        if available_amount_minor < order.payable_amount_minor:
-            raise ApiError(
-                ErrorCode.WALLET_INSUFFICIENT_BALANCE,
-                ERROR_MESSAGES[ErrorCode.WALLET_INSUFFICIENT_BALANCE],
-                status_code=402,
-                details={
-                    "available_amount_minor": available_amount_minor,
-                    "required_amount_minor": order.payable_amount_minor,
-                },
+        if payment_method == Payment.Method.BALANCE:
+            available_amount_minor = get_wallet_available_amount(user)
+            if available_amount_minor < order.payable_amount_minor:
+                raise ApiError(
+                    ErrorCode.WALLET_INSUFFICIENT_BALANCE,
+                    ERROR_MESSAGES[ErrorCode.WALLET_INSUFFICIENT_BALANCE],
+                    status_code=402,
+                    details={
+                        "available_amount_minor": available_amount_minor,
+                        "required_amount_minor": order.payable_amount_minor,
+                    },
+                )
+            charge_result = charge_wallet_for_order(
+                user=user,
+                order_no=str(order.order_no),
+                amount_minor=order.payable_amount_minor,
+                idempotency_key=idempotency_key,
             )
-        charge_result = charge_wallet_for_order(
-            user=user,
-            order_no=str(order.order_no),
-            amount_minor=order.payable_amount_minor,
-            idempotency_key=idempotency_key,
+            return {
+                "order": order_payload(
+                    _confirm_order_paid(
+                        order=order,
+                        payment=charge_result.payment,
+                        actor_user_id=user.id,
+                    )
+                ),
+                "payment": payment_payload(charge_result.payment),
+                "payment_action": "NONE",
+                "reused": charge_result.reused,
+            }
+        external_order_no = str(order.order_no)
+        external_amount_minor = order.payable_amount_minor
+        service_title = order.service.title
+
+    charge_result = create_external_payment(
+        user=user,
+        order_no=external_order_no,
+        amount_minor=external_amount_minor,
+        payment_method=payment_method,
+        description=f"见面聊服务预约：{service_title}",
+        idempotency_key=idempotency_key or f"order-pay:{external_order_no}:{payment_method}",
+    )
+    current_order = Order.objects.get(order_no=external_order_no, user=user)
+    return {
+        "order": order_payload(current_order),
+        "payment": payment_payload(charge_result.payment),
+        "payment_action": "NATIVE_PAY",
+        "reused": charge_result.reused,
+    }
+
+
+def confirm_order_payment(*, payment: Payment) -> Order:
+    """支付渠道确认成功后幂等推进订单并锁定预约时段。"""
+    with transaction.atomic():
+        order = (
+            Order.objects.select_for_update()
+            .select_related("schedule_slot", "service")
+            .filter(order_no=payment.order_no, user=payment.user)
+            .first()
         )
-        previous_status = order.status
-        order.status = Order.Status.PENDING_ACCEPT
-        order.paid_amount_minor = order.payable_amount_minor
-        order.paid_at = timezone.now()
-        order.version += 1
-        order.save(
-            update_fields=[
-                "status",
-                "paid_amount_minor",
-                "paid_at",
-                "version",
-                "updated_at",
-            ]
-        )
-        _mark_schedule_slots(
-            order,
-            status=ScheduleSlot.Status.BOOKED,
-            last_booking_status=ScheduleSlot.LastBookingStatus.BOOKED,
-        )
-        _record_event(
+        if order is None:
+            raise _invalid("order_no", "支付单关联订单不存在")
+        if order.status == Order.Status.PENDING_ACCEPT:
+            return order
+        if order.status != Order.Status.PENDING_PAYMENT:
+            raise ApiError(
+                ErrorCode.ORDER_STATE_INVALID,
+                ERROR_MESSAGES[ErrorCode.ORDER_STATE_INVALID],
+                status_code=409,
+            )
+        return _confirm_order_paid(
             order=order,
-            event_type=OrderStatusLog.EventType.PAID,
-            from_status=previous_status,
-            actor_user_id=user.id,
+            payment=payment,
+            actor_user_id=payment.user_id,
         )
-        return {
-            "order": order_payload(order),
-            "payment": payment_payload(charge_result.payment),
-            "reused": charge_result.reused,
-        }
+
+
+def _confirm_order_paid(*, order: Order, payment: Payment, actor_user_id: int) -> Order:
+    """在调用方事务内落支付成功事实，防止重复推进和时段重复锁定。"""
+    from backend.messaging.services import ensure_order_paid_conversation
+
+    previous_status = order.status
+    order.status = Order.Status.PENDING_ACCEPT
+    order.paid_amount_minor = payment.amount_minor
+    order.paid_at = payment.paid_at or timezone.now()
+    order.version += 1
+    order.save(
+        update_fields=[
+            "status",
+            "paid_amount_minor",
+            "paid_at",
+            "version",
+            "updated_at",
+        ]
+    )
+    _mark_schedule_slots(
+        order,
+        status=ScheduleSlot.Status.BOOKED,
+        last_booking_status=ScheduleSlot.LastBookingStatus.BOOKED,
+    )
+    _record_event(
+        order=order,
+        event_type=OrderStatusLog.EventType.PAID,
+        from_status=previous_status,
+        actor_user_id=actor_user_id,
+    )
+    ensure_order_paid_conversation(order_no=str(order.order_no))
+    create_order_referral_snapshot(order=order)
+    record_provider_event(
+        provider_user_id=order.provider_user_id,
+        event_type="PAYMENT_SUCCESS",
+        biz_id=str(order.order_no),
+    )
+    return order
 
 
 def _refund_and_release(*, order: Order, actor_user_id: int, reason: str) -> None:
@@ -896,6 +1075,13 @@ def _refund_and_release(*, order: Order, actor_user_id: int, reason: str) -> Non
     order.status = Order.Status.REFUNDED if payment else Order.Status.CANCELED
     order.version += 1
     order.save(update_fields=["status", "refunded_amount_minor", "version", "updated_at"])
+    if payment:
+        apply_refund_to_referral_reward(
+            order=order,
+            refund_no=f"order-refund:{order.order_no}",
+            operator_user_id=actor_user_id,
+            reason=reason,
+        )
     _record_event(
         order=order,
         event_type=OrderStatusLog.EventType.REFUNDED
@@ -1030,6 +1216,12 @@ def transition_order(
                 days=settings.REVIEW_WINDOW_DAYS
             )
             create_provider_order_earning(order)
+            create_referral_reward_for_completed_order(order=order)
+            record_provider_event(
+                provider_user_id=order.provider_user_id,
+                event_type="ORDER_COMPLETED",
+                biz_id=str(order.order_no),
+            )
             _mark_schedule_slots(
                 order,
                 status=ScheduleSlot.Status.BOOKED,
@@ -1151,6 +1343,7 @@ def _refund_request_status_text(status: str) -> str:
     return {
         OrderRefundRequest.Status.PENDING: "待审核",
         OrderRefundRequest.Status.REJECTED: "审核拒绝",
+        OrderRefundRequest.Status.PROCESSING: "退款处理中",
         OrderRefundRequest.Status.REFUNDED: "已退款",
         OrderRefundRequest.Status.FAILED: "退款失败",
         OrderRefundRequest.Status.CANCELED: "用户撤销",
@@ -1378,7 +1571,7 @@ def approve_order_refund_request(
     expected_version: int,
     review_note: str,
 ) -> dict[str, Any]:
-    """后台同意退款并原子执行全额余额退款和时段释放。"""
+    """后台同意退款，先登记退款单，再在事务外执行原渠道退款。"""
 
     normalized_note = _validate_review_note(review_note)
     with transaction.atomic():
@@ -1415,45 +1608,12 @@ def approve_order_refund_request(
                 status_code=409,
                 details={"order_no": eligibility_error},
             )
-        try:
-            payment_refund = refund_wallet_for_payment(
-                payment=payment,
-                refund_amount_minor=refund_request.refund_amount_minor,
-                idempotency_key=f"order-refund-request:{refund_request.request_no}",
-            )
-        except ApiError as exc:
-            refund_request.status = OrderRefundRequest.Status.FAILED
-            refund_request.reviewed_by_user_id = admin_user.id
-            refund_request.review_note = normalized_note
-            refund_request.reviewed_at = timezone.now()
-            refund_request.failure_reason = str(exc)
-            refund_request.version += 1
-            refund_request.save(
-                update_fields=[
-                    "status",
-                    "reviewed_by_user_id",
-                    "review_note",
-                    "reviewed_at",
-                    "failure_reason",
-                    "version",
-                    "updated_at",
-                ]
-            )
-            return _refund_request_payload(refund_request)
-        order.refunded_amount_minor = refund_request.refund_amount_minor
-        previous_status = order.status
-        order.status = Order.Status.REFUNDED
-        order.version += 1
-        order.save(
-            update_fields=[
-                "status",
-                "refunded_amount_minor",
-                "version",
-                "updated_at",
-            ]
+        payment_refund = register_refund(
+            payment=payment,
+            refund_amount_minor=refund_request.refund_amount_minor,
+            idempotency_key=f"order-refund-request:{refund_request.request_no}",
         )
-        _release_schedule_slots(order)
-        refund_request.status = OrderRefundRequest.Status.REFUNDED
+        refund_request.status = OrderRefundRequest.Status.PROCESSING
         refund_request.reviewed_by_user_id = admin_user.id
         refund_request.review_note = normalized_note
         refund_request.reviewed_at = timezone.now()
@@ -1472,14 +1632,80 @@ def approve_order_refund_request(
                 "updated_at",
             ]
         )
-        _record_event(
-            order=order,
-            event_type=OrderStatusLog.EventType.REFUNDED,
-            from_status=previous_status,
-            actor_user_id=admin_user.id,
-            reason=normalized_note,
+    executed = execute_refund(payment_refund)
+    apply_order_refund_result(refund=executed)
+    refund_request.refresh_from_db()
+    return _refund_request_payload(refund_request)
+
+
+def apply_order_refund_result(*, refund: Refund) -> None:
+    """根据退款单结果幂等更新订单退款申请、订单状态和预约时段。"""
+    if refund.status == Refund.Status.PENDING:
+        return
+    with transaction.atomic():
+        refund_request = (
+            OrderRefundRequest.objects.select_for_update()
+            .select_related("order", "order__schedule_slot")
+            .filter(payment_refund=refund)
+            .first()
         )
-        return _refund_request_payload(refund_request)
+        if refund_request is None:
+            return
+        if refund.status == Refund.Status.SUCCESS:
+            if refund_request.status == OrderRefundRequest.Status.REFUNDED:
+                return
+            if refund_request.status != OrderRefundRequest.Status.REFUNDED:
+                order = refund_request.order
+                previous_status = order.status
+                if order.status != Order.Status.REFUNDED:
+                    order.refunded_amount_minor = min(
+                        order.paid_amount_minor,
+                        order.refunded_amount_minor + refund.refund_amount_minor,
+                    )
+                    if order.refunded_amount_minor >= order.paid_amount_minor:
+                        order.status = Order.Status.REFUNDED
+                    order.version += 1
+                    order.save(
+                        update_fields=[
+                            "status",
+                            "refunded_amount_minor",
+                            "version",
+                            "updated_at",
+                        ]
+                    )
+                    _release_schedule_slots(order)
+                    _record_event(
+                        order=order,
+                        event_type=OrderStatusLog.EventType.REFUNDED,
+                        from_status=previous_status,
+                        actor_user_id=refund_request.reviewed_by_user_id,
+                        reason=refund_request.review_note,
+                    )
+                    apply_refund_to_referral_reward(
+                        order=order,
+                        refund_no=str(refund.refund_no),
+                        operator_user_id=refund_request.reviewed_by_user_id,
+                        reason=refund_request.review_note or "订单退款重算",
+                    )
+                refund_request.status = OrderRefundRequest.Status.REFUNDED
+                refund_request.failure_reason = ""
+        elif refund.status == Refund.Status.FAILED:
+            if refund_request.status == OrderRefundRequest.Status.FAILED:
+                return
+            if refund_request.status != OrderRefundRequest.Status.FAILED:
+                refund_request.status = OrderRefundRequest.Status.FAILED
+                refund_request.failure_reason = refund.failure_reason
+        else:
+            return
+        refund_request.version += 1
+        refund_request.save(
+            update_fields=[
+                "status",
+                "failure_reason",
+                "version",
+                "updated_at",
+            ]
+        )
 
 
 def reject_order_refund_request(

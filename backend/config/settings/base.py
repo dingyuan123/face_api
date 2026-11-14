@@ -32,6 +32,7 @@ CORS_ALLOW_HEADERS = [
     "x-csrftoken",
     "x-request-id",
     "x-requested-with",
+    "x-visitor-id",
 ]
 CORS_EXPOSE_HEADERS = ["X-Request-ID", "X-Trace-ID"]
 
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.admin",
     "corsheaders",
+    "channels",
     "rest_framework",
     "drf_spectacular",
     "backend.common",
@@ -62,6 +64,11 @@ INSTALLED_APPS = [
     "backend.payouts",
     "backend.providers",
     "backend.media",
+    "backend.locations",
+    "backend.legal",
+    "backend.messaging",
+    "backend.referrals",
+    "backend.adminops",
 ]
 
 MIDDLEWARE = [
@@ -109,6 +116,14 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_TIME_LIMIT = 60 * 20
 CELERY_TASK_SOFT_TIME_LIMIT = 60 * 15
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [get_text("REDIS_URL", "redis://localhost:6379/0")],
+        },
+    }
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -119,6 +134,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 AUTH_USER_MODEL = "accounts.User"
 AUTH_TOKEN_SIGNING_KEY = get_text("AUTH_TOKEN_SIGNING_KEY", "dev-only-token-signing-key") or ""
+OAUTH_SUBJECT_HASH_KEY = get_text("OAUTH_SUBJECT_HASH_KEY", "dev-only-oauth-subject-hash-key") or ""
 PHONE_HASH_KEY = get_text("PHONE_HASH_KEY", "dev-only-phone-hash-key") or ""
 SMS_MOCK_SIGNING_KEY = get_text("SMS_MOCK_SIGNING_KEY", "dev-only-sms-mock-signing-key") or ""
 SMS_MOCK_ENABLED = get_bool("SMS_MOCK_ENABLED", ENVIRONMENT != "production")
@@ -136,6 +152,14 @@ IDENTITY_ENCRYPTION_KEY = (
     )
     or ""
 )
+LOCATION_ENCRYPTION_KEY = (
+    get_text("LOCATION_ENCRYPTION_KEY", "dev-only-location-encryption-key-change-me") or ""
+)
+LOCATION_SELECTION_SIGNING_KEY = (
+    get_text("LOCATION_SELECTION_SIGNING_KEY", "dev-only-location-selection-key-change-me") or ""
+)
+LOCATION_PROVIDER_TTL_SECONDS = get_int("LOCATION_PROVIDER_TTL_SECONDS", 24 * 60 * 60)
+LOCATION_SELECTION_TTL_SECONDS = get_int("LOCATION_SELECTION_TTL_SECONDS", 30 * 60)
 IDENTITY_MOCK_ENABLED = get_bool("IDENTITY_MOCK_ENABLED", ENVIRONMENT != "production")
 PROVIDER_APPLICATION_MIN_LIFE_PHOTOS = get_int("PROVIDER_APPLICATION_MIN_LIFE_PHOTOS", 3)
 PROVIDER_APPLICATION_MAX_LIFE_PHOTOS = get_int("PROVIDER_APPLICATION_MAX_LIFE_PHOTOS", 9)
@@ -148,6 +172,7 @@ PROVIDER_APPLICATION_INTRODUCTION_MAX_LENGTH = get_int(
 MEDIA_ROOT = Path(
     get_text("MEDIA_ROOT", str(PROJECT_ROOT / "var" / "media")) or PROJECT_ROOT / "var" / "media"
 )
+H5_ROOT = Path(get_text("H5_ROOT", str(PROJECT_ROOT / "h5")) or PROJECT_ROOT / "h5")
 MEDIA_URL = get_text("MEDIA_URL", "/api/v1/media/") or "/api/v1/media/"
 MEDIA_MAX_UPLOAD_BYTES = get_int("MEDIA_MAX_UPLOAD_BYTES", 5 * 1024 * 1024)
 MEDIA_MIN_IMAGE_DIMENSION = get_int("MEDIA_MIN_IMAGE_DIMENSION", 64)
@@ -175,8 +200,49 @@ SEARCH_TRENDING_RECENCY_DECAY_PERCENT = get_int(
 )
 SEARCH_TRENDING_MIN_SEARCH_COUNT = get_int("SEARCH_TRENDING_MIN_SEARCH_COUNT", 1)
 SEARCH_TRENDING_SHOW_SCORE = get_bool("SEARCH_TRENDING_SHOW_SCORE", False)
+TENCENT_MAP_KEY = get_text("TENCENT_MAP_KEY", "") or ""
+TENCENT_MAP_API_BASE_URL = (
+    get_text("TENCENT_MAP_API_BASE_URL", "https://apis.map.qq.com/ws/place/v1/search")
+    or "https://apis.map.qq.com/ws/place/v1/search"
+)
+TENCENT_MAP_TIMEOUT_SECONDS = get_int("TENCENT_MAP_TIMEOUT_SECONDS", 5)
+LOCATION_SEARCH_KEYWORD_MAX_LENGTH = get_int("LOCATION_SEARCH_KEYWORD_MAX_LENGTH", 50)
+LOCATION_SEARCH_RADIUS_DEFAULT_M = get_int("LOCATION_SEARCH_RADIUS_DEFAULT_M", 2000)
+LOCATION_SEARCH_RADIUS_MAX_M = get_int("LOCATION_SEARCH_RADIUS_MAX_M", 5000)
+LOCATION_SEARCH_LIMIT_MAX = get_int("LOCATION_SEARCH_LIMIT_MAX", 20)
+LOCATION_SEARCH_CACHE_TTL_SECONDS = get_int("LOCATION_SEARCH_CACHE_TTL_SECONDS", 30)
 PUBLIC_SHARE_BASE_URL = (
     get_text("PUBLIC_SHARE_BASE_URL", "https://app.example.com") or "https://app.example.com"
+)
+SHARE_POSTER_BRAND_NAME = (
+    get_text("SHARE_POSTER_BRAND_NAME", "FaceTo · 见面聊") or "FaceTo · 见面聊"
+)
+SHARE_POSTER_BRAND_LABEL = (
+    get_text("SHARE_POSTER_BRAND_LABEL", "你的见面破冰者") or "你的见面破冰者"
+)
+SHARE_POSTER_SLOGAN_LINE_1 = get_text("SHARE_POSTER_SLOGAN_LINE_1", "想见面，") or "想见面，"
+SHARE_POSTER_SLOGAN_LINE_2 = (
+    get_text("SHARE_POSTER_SLOGAN_LINE_2", "却怕没话聊？") or "却怕没话聊？"
+)
+SHARE_POSTER_SLOGAN_SUBTITLE = (
+    get_text("SHARE_POSTER_SLOGAN_SUBTITLE", "从共同兴趣开始，让每次见面都有话聊。")
+    or "从共同兴趣开始，让每次见面都有话聊。"
+)
+SHARE_POSTER_CARD_FOOTER = (
+    get_text("SHARE_POSTER_CARD_FOOTER", "先聊兴趣，再约公共场所见面")
+    or "先聊兴趣，再约公共场所见面"
+)
+SHARE_POSTER_BOTTOM_SLOGAN = (
+    get_text("SHARE_POSTER_BOTTOM_SLOGAN", "不必硬聊 · 兴趣就是你的破冰者")
+    or "不必硬聊 · 兴趣就是你的破冰者"
+)
+SHARE_POSTER_SHARE_TITLE = (
+    get_text("SHARE_POSTER_SHARE_TITLE", "FaceTo · 见面聊｜你的见面破冰者")
+    or "FaceTo · 见面聊｜你的见面破冰者"
+)
+SHARE_POSTER_SHARE_DESCRIPTION = (
+    get_text("SHARE_POSTER_SHARE_DESCRIPTION", "先聊兴趣，再约公共场所见面")
+    or "先聊兴趣，再约公共场所见面"
 )
 NEWS_SYNC_ASYNC = get_bool("NEWS_SYNC_ASYNC", True)
 NEWS_FETCH_TIMEOUT_SECONDS = get_int("NEWS_FETCH_TIMEOUT_SECONDS", 15)
@@ -187,6 +253,25 @@ MOMENT_IMAGE_MIN_COUNT = get_int("MOMENT_IMAGE_MIN_COUNT", 1)
 MOMENT_IMAGE_MAX_COUNT = get_int("MOMENT_IMAGE_MAX_COUNT", 9)
 MOMENT_TAG_MAX_COUNT = get_int("MOMENT_TAG_MAX_COUNT", 5)
 PAYMENT_MODE = get_text("PAYMENT_MODE", "MOCK_BALANCE") or "MOCK_BALANCE"
+PAYMENT_GATEWAY_MODE = (get_text("PAYMENT_GATEWAY_MODE", "MOCK") or "MOCK").upper()
+PAYMENT_CURRENCY = get_text("PAYMENT_CURRENCY", "CNY") or "CNY"
+PAYMENT_CLIENT_PAYLOAD_TTL_SECONDS = get_int("PAYMENT_CLIENT_PAYLOAD_TTL_SECONDS", 600)
+WECHAT_PAY_MCH_ID = get_text("WECHAT_PAY_MCH_ID", "") or ""
+WECHAT_PAY_APP_ID = get_text("WECHAT_PAY_APP_ID", "") or ""
+WECHAT_PAY_API_V3_KEY = get_text("WECHAT_PAY_API_V3_KEY", "") or ""
+WECHAT_PAY_MERCHANT_SERIAL_NO = get_text("WECHAT_PAY_MERCHANT_SERIAL_NO", "") or ""
+WECHAT_PAY_PRIVATE_KEY = get_text("WECHAT_PAY_PRIVATE_KEY", "") or ""
+WECHAT_PAY_PLATFORM_PUBLIC_KEY = get_text("WECHAT_PAY_PLATFORM_PUBLIC_KEY", "") or ""
+WECHAT_PAY_PLATFORM_PUBLIC_KEY_ID = get_text("WECHAT_PAY_PLATFORM_PUBLIC_KEY_ID", "") or ""
+WECHAT_PAY_NOTIFY_URL = get_text("WECHAT_PAY_NOTIFY_URL", "") or ""
+WECHAT_PAY_API_BASE_URL = get_text("WECHAT_PAY_API_BASE_URL", "https://api.mch.weixin.qq.com") or ""
+WECHAT_PAY_TIMEOUT_SECONDS = get_int("WECHAT_PAY_TIMEOUT_SECONDS", 8)
+ALIPAY_APP_ID = get_text("ALIPAY_APP_ID", "") or ""
+ALIPAY_PRIVATE_KEY = get_text("ALIPAY_PRIVATE_KEY", "") or ""
+ALIPAY_PUBLIC_KEY = get_text("ALIPAY_PUBLIC_KEY", "") or ""
+ALIPAY_NOTIFY_URL = get_text("ALIPAY_NOTIFY_URL", "") or ""
+ALIPAY_GATEWAY_URL = get_text("ALIPAY_GATEWAY_URL", "https://openapi.alipay.com/gateway.do") or ""
+ALIPAY_TIMEOUT_SECONDS = get_int("ALIPAY_TIMEOUT_SECONDS", 8)
 ENABLE_DEV_WALLET_TOPUP = get_bool(
     "ENABLE_DEV_WALLET_TOPUP",
     ENVIRONMENT != "production",
@@ -203,7 +288,7 @@ PROVIDER_INCOME_SETTLEMENT_DELAY_DAYS = get_int(
 )
 PROVIDER_PLATFORM_COMMISSION_RATE_BPS = get_int(
     "PROVIDER_PLATFORM_COMMISSION_RATE_BPS",
-    0,
+    1000,
 )
 MEDIA_URL_SIGNING_KEY = (
     get_text("MEDIA_URL_SIGNING_KEY", "dev-only-media-url-signing-key-change-me") or ""
@@ -218,6 +303,14 @@ PROFILE_DEFAULT_CITY_CODE = get_text("PROFILE_DEFAULT_CITY_CODE", "LZ") or "LZ"
 PROFILE_NICKNAME_MAX_LENGTH = get_int("PROFILE_NICKNAME_MAX_LENGTH", 30)
 PROFILE_SIGNATURE_MAX_LENGTH = get_int("PROFILE_SIGNATURE_MAX_LENGTH", 100)
 PROFILE_INTEREST_TAG_MAX_COUNT = get_int("PROFILE_INTEREST_TAG_MAX_COUNT", 5)
+REFERRAL_REWARD_RATE_BPS = get_int("REFERRAL_REWARD_RATE_BPS", 0)
+REFERRAL_REWARD_MAX_AMOUNT_MINOR = get_int("REFERRAL_REWARD_MAX_AMOUNT_MINOR", 0)
+REFERRAL_REWARD_DELAY_DAYS = get_int("REFERRAL_REWARD_DELAY_DAYS", 7)
+REFERRAL_REWARD_FUNDING_CAP_TO_PLATFORM_FEE = get_bool(
+    "REFERRAL_REWARD_FUNDING_CAP_TO_PLATFORM_FEE",
+    True,
+)
+REFERRAL_VISIT_RETENTION_DAYS = get_int("REFERRAL_VISIT_RETENTION_DAYS", 180)
 SCHEDULE_DEFAULT_TIMEZONE = (
     get_text("SCHEDULE_DEFAULT_TIMEZONE", "Asia/Shanghai") or "Asia/Shanghai"
 )
@@ -233,6 +326,20 @@ API_DISPLAY_TIMEZONE = get_text("API_DISPLAY_TIMEZONE", "Asia/Shanghai") or "Asi
 API_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 AUTH_ACCESS_TOKEN_LIFETIME = get_int("AUTH_ACCESS_TOKEN_LIFETIME", 60 * 60 * 2)
 AUTH_REFRESH_TOKEN_LIFETIME = get_int("AUTH_REFRESH_TOKEN_LIFETIME", 60 * 60 * 24 * 30)
+APPLE_LOGIN_ENABLED = get_bool("APPLE_LOGIN_ENABLED", True)
+APPLE_CLIENT_ID = get_text("APPLE_CLIENT_ID", "") or ""
+APPLE_JWKS_URL = get_text("APPLE_JWKS_URL", "https://appleid.apple.com/auth/keys") or ""
+APPLE_JWKS_TIMEOUT_SECONDS = get_int("APPLE_JWKS_TIMEOUT_SECONDS", 5)
+WECHAT_LOGIN_ENABLED = get_bool("WECHAT_LOGIN_ENABLED", True)
+WECHAT_LOGIN_APP_ID = get_text("WECHAT_LOGIN_APP_ID", "") or ""
+WECHAT_LOGIN_APP_SECRET = get_text("WECHAT_LOGIN_APP_SECRET", "") or ""
+WECHAT_LOGIN_API_BASE_URL = get_text("WECHAT_LOGIN_API_BASE_URL", "https://api.weixin.qq.com") or ""
+WECHAT_LOGIN_TIMEOUT_SECONDS = get_int("WECHAT_LOGIN_TIMEOUT_SECONDS", 5)
+MESSAGING_WS_TICKET_TTL_SECONDS = get_int("MESSAGING_WS_TICKET_TTL_SECONDS", 60)
+MESSAGING_MESSAGE_MAX_LENGTH = get_int("MESSAGING_MESSAGE_MAX_LENGTH", 2000)
+MESSAGING_COMPLETED_SEND_WINDOW_DAYS = get_int("MESSAGING_COMPLETED_SEND_WINDOW_DAYS", 7)
+MESSAGING_RECORD_RETENTION_DAYS = get_int("MESSAGING_RECORD_RETENTION_DAYS", 180)
+MESSAGING_MAX_PAGE_SIZE = get_int("MESSAGING_MAX_PAGE_SIZE", 100)
 
 LANGUAGE_CODE = "zh-hans"
 TIME_ZONE = "UTC"
@@ -269,6 +376,9 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 20,
     "EXCEPTION_HANDLER": "backend.common.exceptions.custom_exception_handler",
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_THROTTLE_RATES": {
+        "location_search": "30/minute",
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -288,6 +398,9 @@ SPECTACULAR_SETTINGS = {
         "OrderContactTargetRoleEnum": ["USER", "PROVIDER"],
         "OrderActorRoleEnum": ["USER", "PROVIDER", "SYSTEM"],
         "OrderNextActionRoleEnum": ["USER", "PROVIDER", "NONE"],
+        "MessagingConversationStatusEnum": ["OPEN", "READ_ONLY", "CLOSED"],
+        "MessagingMemberRoleEnum": ["CUSTOMER", "PROVIDER", "SYSTEM"],
+        "MessagingMessageTypeEnum": ["TEXT", "IMAGE", "SYSTEM"],
     },
 }
 

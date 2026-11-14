@@ -57,9 +57,31 @@ class HomeFeedItemSerializer(serializers.Serializer):
     online_status = serializers.CharField(help_text="在线状态；当前数据未接入时为 UNKNOWN")
     distance_km = serializers.FloatField(
         allow_null=True,
-        help_text="距离，单位千米；位置数据未接入时为空",
+        help_text="相对浏览者当前位置的直线距离，保留一位小数；未提供位置时为空",
+    )
+    distance_text = serializers.CharField(
+        allow_null=True,
+        help_text="前端可直接展示的模糊距离文案；未提供位置时为空",
     )
     rating = serializers.FloatField(allow_null=True, help_text="评分；评价数据未接入时为空")
+
+
+class HomeFeedLocationRequestSerializer(serializers.Serializer):
+    """首页服务者卡片浏览请求；浏览者坐标只用于本次响应距离计算。"""
+
+    city_code = serializers.CharField(required=False, help_text="城市稳定代码")
+    category_code = serializers.CharField(required=False, help_text="服务类目代码")
+    sort = serializers.CharField(required=False, help_text="排序方式")
+    cursor = serializers.CharField(required=False, help_text="下一页游标")
+    limit = serializers.IntegerField(required=False, min_value=1, help_text="每页数量")
+    latitude = serializers.FloatField(required=False, help_text="浏览者当前纬度，仅本次使用")
+    longitude = serializers.FloatField(required=False, help_text="浏览者当前经度，仅本次使用")
+    coordinate_system = serializers.ChoiceField(
+        choices=["GCJ02", "WGS84"],
+        required=False,
+        default="GCJ02",
+        help_text="浏览者坐标系",
+    )
 
 
 class SearchProviderGroupSerializer(serializers.Serializer):

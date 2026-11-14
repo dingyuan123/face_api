@@ -15,6 +15,7 @@ from backend.common.exceptions import ApiError
 from backend.content.models import Moment
 from backend.content.services import moment_payload
 from backend.media.services import get_media_payloads
+from backend.providers.analytics import record_provider_event
 from backend.providers.models import ProviderProfile
 from backend.reviews.models import ProviderRatingStat
 from backend.social.models import Favorite, UserFollow
@@ -122,6 +123,11 @@ def provider_public_payload(
         target_id=profile.user.public_id,
     ).count()
     rating_stat = ProviderRatingStat.objects.filter(provider_user=profile.user).first()
+    record_provider_event(
+        provider_user_id=profile.user_id,
+        event_type="PROFILE_VIEW",
+        request=request,
+    )
     return {
         "provider": {
             "public_id": str(profile.user.public_id),

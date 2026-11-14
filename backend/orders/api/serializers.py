@@ -20,6 +20,9 @@ class OrderCreateRequestSerializer(serializers.Serializer):
         min_value=1,
         help_text="预约起始小时单元查询版本号",
     )
+    location_selection_token = serializers.CharField(
+        help_text="地点搜索接口返回的短期地点选择凭证；订单只接受已过滤公共场所",
+    )
 
 
 class OrderQuoteRequestSerializer(serializers.Serializer):
@@ -27,6 +30,28 @@ class OrderQuoteRequestSerializer(serializers.Serializer):
 
     service_id = serializers.UUIDField(help_text="预约服务 UUID")
     slot_id = serializers.UUIDField(help_text="预约起始小时单元 UUID；后端按服务时长检查连续单元")
+    location_selection_token = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="可选的地点选择凭证，用于报价确认地点摘要",
+    )
+
+
+class OrderMeetingLocationSerializer(serializers.Serializer):
+    """订单见面地点快照，不含用户当前位置。"""
+
+    poi_id = serializers.CharField(help_text="地图 POI 标识")
+    name = serializers.CharField(help_text="见面地点名称")
+    address = serializers.CharField(help_text="见面地点完整地址")
+    province = serializers.CharField(help_text="见面地点省份")
+    city = serializers.CharField(help_text="见面地点城市")
+    district = serializers.CharField(help_text="见面地点区县")
+    latitude = serializers.FloatField(allow_null=True, help_text="见面地点纬度")
+    longitude = serializers.FloatField(allow_null=True, help_text="见面地点经度")
+    category_code = serializers.CharField(help_text="见面地点地图分类代码")
+    source = serializers.CharField(help_text="地点来源")
+    policy_version = serializers.CharField(help_text="地点过滤规则版本")
+    selected_at = serializers.DateTimeField(help_text="用户确认地点时间")
 
 
 class OrderQuoteLineSerializer(serializers.Serializer):
@@ -61,12 +86,19 @@ class OrderQuoteResponseSerializer(serializers.Serializer):
     platform_fee_amount_minor = serializers.IntegerField(
         help_text="平台服务费，当前为 0，单位为币种最小单位"
     )
+    platform_commission_amount_minor = serializers.IntegerField(
+        help_text="平台从服务者收入中抽取的佣金，不增加用户应付金额，单位为分"
+    )
     payable_amount_minor = serializers.IntegerField(help_text="最终应付金额，单位为币种最小单位")
     payable_display = serializers.CharField(help_text="只读应付金额展示字符串")
     service_version = serializers.IntegerField(help_text="下单时作为 expected_service_version")
     slot_version = serializers.IntegerField(help_text="下单时作为 expected_slot_version")
     breakdown = OrderQuoteLineSerializer(many=True, help_text="金额计算明细")
     discounts = OrderQuoteDiscountSerializer(many=True, help_text="优惠明细")
+    meeting_location = OrderMeetingLocationSerializer(
+        allow_null=True,
+        help_text="本次试算关联的见面地点摘要；未提供凭证时为空",
+    )
     quoted_at = serializers.DateTimeField(help_text="金额试算时间")
 
 
@@ -79,6 +111,9 @@ class OrderPriceSerializer(serializers.Serializer):
     )
     discount_amount_minor = serializers.IntegerField(help_text="折扣金额，单位为分")
     platform_fee_amount_minor = serializers.IntegerField(help_text="平台服务费，单位为分")
+    platform_commission_amount_minor = serializers.IntegerField(
+        help_text="平台从服务者收入中抽取的佣金，单位为分",
+    )
     payable_amount_minor = serializers.IntegerField(help_text="订单应付金额，单位为分")
     paid_amount_minor = serializers.IntegerField(help_text="已支付金额，单位为分")
     refunded_amount_minor = serializers.IntegerField(help_text="已退款金额，单位为分")
@@ -219,6 +254,10 @@ class OrderResponseSerializer(serializers.Serializer):
     provider_public_id = serializers.UUIDField(help_text="服务者用户 UUID")
     service = OrderServiceResponseSerializer(help_text="订单服务和封面信息")
     schedule_slot = serializers.DictField(help_text="预约时段快照")
+    meeting_location = OrderMeetingLocationSerializer(
+        allow_null=True,
+        help_text="订单见面地点快照，仅订单参与人可访问",
+    )
     participants = OrderParticipantsSerializer(help_text="见面双方信息")
     contact = OrderContactSerializer(help_text="当前登录者联系对方的信息")
     progress = OrderProgressSerializer(help_text="订单进度和下一步操作")
@@ -240,6 +279,45 @@ class OrderSummaryResponseSerializer(serializers.Serializer):
     status_counts = serializers.DictField(help_text="按订单状态统计的数量")
 
 
+class PaymentResponseSerializer(serializers.Serializer):
+    """订单支付单和原生支付 SDK 参数。"""
+
+    payment_no = serializers.UUIDField(help_text="支付单 UUID")
+    order_no = serializers.UUIDField(help_text="关联订单 UUID")
+    payment_method = serializers.ChoiceField(
+        choices=["BALANCE", "WECHAT_APP", "ALIPAY_APP"],
+        help_text="支付方式",
+    )
+    payment_channel = serializers.CharField(help_text="支付渠道代码")
+    currency = serializers.CharField(help_text="支付币种")
+    amount_minor = serializers.IntegerField(help_text="支付金额，单位为分")
+    status = serializers.ChoiceField(
+        choices=["PENDING", "SUCCESS", "FAILED", "CLOSED", "REFUNDED"],
+        help_text="支付单状态",
+    )
+    client_payload = serializers.DictField(
+        help_text="微信或支付宝原生 SDK 调起参数；余额支付为空对象"
+    )
+    expires_at = serializers.DateTimeField(
+        allow_null=True,
+        help_text="支付参数失效时间",
+    )
+    paid_at = serializers.DateTimeField(allow_null=True, help_text="支付成功时间")
+    version = serializers.IntegerField(help_text="支付单版本号")
+
+
+class OrderPayResponseSerializer(serializers.Serializer):
+    """订单支付发起结果。"""
+
+    order = OrderResponseSerializer(help_text="支付发起后的订单")
+    payment = PaymentResponseSerializer(help_text="支付单及原生支付参数")
+    payment_action = serializers.ChoiceField(
+        choices=["NONE", "NATIVE_PAY"],
+        help_text="NONE 表示直接成功，NATIVE_PAY 表示需要调起客户端支付 SDK",
+    )
+    reused = serializers.BooleanField(help_text="是否复用了相同幂等请求")
+
+
 class OrderVersionRequestSerializer(serializers.Serializer):
     """订单操作版本请求。"""
 
@@ -247,10 +325,12 @@ class OrderVersionRequestSerializer(serializers.Serializer):
 
 
 class OrderPayRequestSerializer(OrderVersionRequestSerializer):
-    """钱包余额支付订单请求。"""
+    """余额、微信 App 或支付宝 App 支付订单请求。"""
 
-    payment_method = serializers.CharField(
-        default="BALANCE", help_text="支付方式，当前仅支持 BALANCE"
+    payment_method = serializers.ChoiceField(
+        choices=["BALANCE", "WECHAT_APP", "ALIPAY_APP"],
+        default="BALANCE",
+        help_text="支付方式；外部支付必须通过回调确认成功",
     )
 
 
@@ -276,7 +356,7 @@ class OrderRefundRequestSerializer(serializers.Serializer):
     request_no = serializers.UUIDField(help_text="退款申请业务 UUID")
     order_no = serializers.UUIDField(help_text="关联订单业务 UUID")
     status = serializers.ChoiceField(
-        choices=["PENDING", "REJECTED", "REFUNDED", "FAILED", "CANCELED"],
+        choices=["PENDING", "REJECTED", "PROCESSING", "REFUNDED", "FAILED", "CANCELED"],
         help_text="退款申请状态",
     )
     status_text = serializers.CharField(help_text="退款申请状态中文文案")

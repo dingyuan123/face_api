@@ -17,9 +17,12 @@ from backend.providers.api.serializers import (
     ProviderApplicationInputSerializer,
     ProviderApplicationResponseSerializer,
     ProviderApplicationUpdateRequestSerializer,
+    ProviderDashboardResponseSerializer,
     ProviderReviewRequestSerializer,
 )
+from backend.providers.dashboard import provider_dashboard_payload
 from backend.providers.models import ProviderApplication
+from backend.providers.profile_services import require_provider_enabled
 from backend.providers.services import (
     application_payload,
     get_application_for_user,
@@ -195,3 +198,31 @@ class AdminProviderApplicationRejectView(APIView):
             expected_version=serializer.validated_data["expected_version"],
         )
         return Response(application_payload(application, application.user, request))
+
+
+class ProviderDashboardView(APIView):
+    """服务者工作台今日概览和数据看板。"""
+
+    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = [BearerTokenAuthentication]
+    permission_classes: ClassVar[list[type[BasePermission]]] = [IsAuthenticated]
+
+    @extend_schema(
+        summary="获取服务者数据看板",
+        parameters=[
+            OpenApiParameter(
+                "range",
+                type=str,
+                required=False,
+                description="统计周期：7d 或 30d，默认 7d",
+            )
+        ],
+        responses={200: ProviderDashboardResponseSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        require_provider_enabled(request.user)
+        return Response(
+            provider_dashboard_payload(
+                provider_user=request.user,
+                range_name=request.query_params.get("range", "7d"),
+            )
+        )

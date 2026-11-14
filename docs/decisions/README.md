@@ -57,4 +57,16 @@
 - `0030-news-sync-cover-summary-policy.md`：资讯同步标题、摘要和封面补全策略。
 - `0031-postgres-comprehensive-search.md`：PostgreSQL 综合搜索、搜索聚合和热门搜索控制。
 - `0032-development-password-login-for-api-docs.md`：Swagger 联调用开发账号密码登录和生产禁用边界。
+- `0033-location-search-and-tencent-map.md`：地图选点、公共场所过滤、距离计算和腾讯地图适配边界。
+- `0034-provider-location-home-feed-order-location.md`：服务者加密位置、普通用户临时浏览位置和订单见面地点快照。
+- `0035-role-promotion-after-provider-approval.md`：首次身份与服务者审核通过后的当前主身份提升。
+- `0036-oauth-login-and-real-payment-adapters.md`：Apple/微信登录、手机号安全合并和微信/支付宝 App 支付适配。
+- `0037-wechat-channel-reference-format.md`：微信支付商户渠道关联标识格式。
+- `0038-order-based-realtime-chat.md`：基于订单的 WebSocket 聊天、消息事实和 Outbox 投递。
+- `0039-shared-conversation-and-configurable-window.md`：用户—服务者共享会话、多订单复用、用户级隐藏和配置化发送窗口。
+- `0040-profile-share-poster-data-contract.md`：个人分享海报数据、可配置文案、主页链接和前端二维码边界。
+- `0041-referral-binding-and-reward-ledger.md`：一级邀请绑定、分享归因、奖励政策快照和推广收益冲减。
+- `0042-identity-card-evidence-fields.md`：服务者申请和实名认证的身份证正反面资料边界。
+- `0043-test-management-review-dashboard.md`：开发测试管理后台总览和实名/服务者人工审核界面。
+- `0044-provider-dashboard-metrics.md`：服务者工作台指标、浏览事件和转化漏斗口径。
 

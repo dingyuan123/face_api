@@ -24,6 +24,17 @@ def _fernet() -> Fernet:
         return Fernet(base64.urlsafe_b64encode(digest))
 
 
+def _location_fernet() -> Fernet:
+    """构造位置信息专用加密器，位置密钥与身份认证密钥分离。"""
+
+    raw_key = settings.LOCATION_ENCRYPTION_KEY.encode("utf-8")
+    try:
+        return Fernet(raw_key)
+    except (ValueError, TypeError):
+        digest = hashlib.sha256(raw_key).digest()
+        return Fernet(base64.urlsafe_b64encode(digest))
+
+
 def encrypt_text(value: str) -> str:
     """使用身份加密密钥对敏感文本进行 Fernet 加密。"""
     return _fernet().encrypt(value.encode("utf-8")).decode("ascii")
@@ -33,6 +44,25 @@ def decrypt_text(value: str) -> str:
     """解密身份敏感文本；失败时返回统一内部错误。"""
     try:
         return _fernet().decrypt(value.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError) as exc:
+        raise ApiError(
+            ErrorCode.INTERNAL_ERROR,
+            ERROR_MESSAGES[ErrorCode.INTERNAL_ERROR],
+            status_code=500,
+        ) from exc
+
+
+def encrypt_location_text(value: str) -> str:
+    """使用位置专用密钥加密坐标，不保存可直接读取的明文位置。"""
+
+    return _location_fernet().encrypt(value.encode("utf-8")).decode("ascii")
+
+
+def decrypt_location_text(value: str) -> str:
+    """解密位置专用密文，失败时返回统一内部错误。"""
+
+    try:
+        return _location_fernet().decrypt(value.encode("ascii")).decode("utf-8")
     except (InvalidToken, ValueError) as exc:
         raise ApiError(
             ErrorCode.INTERNAL_ERROR,

@@ -131,11 +131,18 @@
 | `GET` | `/api/v1/media/display/{media_id}/` | 签名 URL | 10 分钟内可重复加载 |
 | `GET` | `/api/v1/users/me/profile/` | 用户 Bearer | 查询本人资料 |
 | `PATCH` | `/api/v1/users/me/profile/` | 用户 Bearer | `expected_version` 乐观锁 |
+| `GET` | `/api/v1/users/me/share-poster/` | 用户 Bearer | 获取个人分享海报数据 |
+| `GET` | `/api/v1/referrals/me/` | 用户 Bearer | 分享赚钱页总览 |
+| `POST` | `/api/v1/referrals/me/share-links/` | 用户 Bearer | 按渠道生成分享链接 |
+| `GET` | `/api/v1/referrals/me/rewards/summary/` | 用户 Bearer | 奖励状态汇总 |
+| `GET` | `/api/v1/referrals/me/rewards/` | 用户 Bearer | 奖励明细分页 |
+| `POST` | `/api/v1/referrals/visits/` | 公开 | 记录匿名分享访问，不绑定账号 |
 | `GET` | `/api/v1/profile-options/interest-tags/` | 公开 | 读取启用中的兴趣标签配置 |
 | `GET` | `/api/v1/profile-options/cities/` | 公开 | 读取启用中的城市代码配置 |
 | `GET` | `/api/v1/provider-profile/me/` | 服务者 Bearer | 查询服务者资料 |
 | `PATCH` | `/api/v1/provider-profile/me/` | 服务者 Bearer | `expected_version` 乐观锁 |
 | `GET` | `/api/v1/provider-services/` | 服务者 Bearer | `page/page_size/status` 列表和汇总 |
+| `GET` | `/api/v1/provider-dashboard/` | 服务者 Bearer | `range=7d/30d` 工作台和数据看板 |
 | `POST` | `/api/v1/provider-services/` | 服务者 Bearer | 创建 `DRAFT`，支持 `Idempotency-Key` |
 | `GET/PATCH/DELETE` | `/api/v1/provider-services/{service_id}/` | 服务者 Bearer | 查询、编辑、逻辑删除草稿 |
 | `POST` | `/api/v1/provider-services/{service_id}/submit-review/` | 服务者 Bearer | `expected_version` |
@@ -257,9 +264,36 @@
 
 - `[DESIGN]` 个人资料修改支持局部字段；`interest_tag_codes` 传入时整体替换，最多 5 个稳定标签代码。
 - `[DESIGN]` 响应中的 `trust_level` 当前仅为预留字段，客户端不得通过资料修改接口写入等级。
+- `[DESIGN]` 个人分享海报响应字段为 `brand_name/brand_label/slogan_line_1/slogan_line_2/slogan_subtitle/cover/nickname/age/city/signature/interest_tags/profile_url/qr_image_url/qr_image_expires_at/card_footer/bottom_slogan/share`。
+- `[DESIGN]` `cover` 复用 `MediaAssetSummary`；`age` 未填写时为 `null`，`interest_tags` 返回展示名称。`share` 包含 `link_url/title/description`。
+- `[DESIGN]` `profile_url` 与 `share.link_url` 相同，格式为 `PUBLIC_SHARE_BASE_URL/invite/` 并携带 `invite_code/share_no`；H5 页面公开托管，不包含 Bearer Token、手机号或身份证信息。
+- `[DESIGN]` `qr_image_url` 是后端生成的二维码 PNG 短期签名地址，`qr_image_expires_at` 返回 `YYYY-MM-DD HH:mm:ss`；二维码内容编码 `profile_url`，不是 `qr_image_url`。
+- `[DESIGN]` 二维码图片地址可不带 Authorization 加载，但必须校验签名和过期时间；过期后前端重新请求海报接口获取新地址。
+- `[DESIGN]` 扫码后的落地方式应优先使用 App Universal Link/Deep Link；若微信或浏览器无法直接打开 App，则使用携带 `invite_code/share_no` 的 H5 落地页引导注册，归因参数最终由登录请求提交。
+- `[DESIGN]` 海报文案由 `SHARE_POSTER_*` 配置读取，OpenAPI 返回当前运行配置值，客户端不得把示例文案当作不可变业务规则。
+
+### 分享推广接口
+
+- `[DESIGN]` 登录接口统一支持可选 `referral_context`：`invite_code/share_no（兼容 share_id）/channel/campaign_code/visitor_id`；只有新用户注册或 OAuth 首次完成手机号绑定时会创建归因。
+- `[DESIGN]` `GET /api/v1/referrals/me/` 返回 `invite_code/share_link/registered_count/ordered_user_count/valid_order_amount_minor/reward_summary`。
+- `[DESIGN]` `POST /api/v1/referrals/me/share-links/` 请求 `channel/campaign_code`，支持 `Idempotency-Key`；重复同键同请求返回同一链接，同键异参返回 409。
+- `[DESIGN]` `POST /api/v1/referrals/visits/` 请求 `share_no` 或 `invite_code` 以及可选 `visitor_id`；接口只记录匿名访问，不直接绑定邀请人。
+- `[DESIGN]` 奖励响应包含 `reward_no/order_no/currency/reward_base_minor/reward_rate_bps/amount_minor/status/settle_after/settled_at/version/policy_version`，不返回邀请人内部主键或账户流水。
+- `[DESIGN]` 管理员接口为 `GET/POST /api/v1/admin/referral-policies/`、`POST /api/v1/admin/referral-policies/{policy_no}/retire/`、`GET /api/v1/admin/referrals/attributions/`、`GET /api/v1/admin/referrals/rewards/`、`POST /api/v1/admin/referrals/rewards/{reward_no}/actions/{action}/` 和 `POST .../adjust/`。
+- `[DESIGN]` 服务者数据看板响应包含 `range/today/overview/comparison/income_trend/funnel/suggestions`；待评价数量只统计用户未评价订单。
+- `[DESIGN]` 公开服务者主页和服务详情接口接受 `X-Visitor-ID` 或 `visitor_id` 匿名访问标识，服务端只保存 HMAC 摘要；正常下单、支付、完成接口会自动记录转化事件。
+- `[DESIGN]` 奖励状态动作只接受 `freeze/unfreeze/cancel`，调整接口提交 `expected_version/amount_delta_minor/reason` 和 `Idempotency-Key`；所有人工操作写状态日志。
+- `[DESIGN]` 奖励政策版本只创建和停止生效，不修改历史版本；订单始终按支付时快照计算。
+- `[DESIGN]` 下单试算和订单价格响应新增 `platform_commission_amount_minor`；它表示服务者收入中的平台佣金，不改变用户 `payable_amount_minor`。当前 `platform_fee_amount_minor` 保持 0。
 
 - `[DESIGN]` 服务者申请请求字段为 `introduction`、写入专用的 `real_name/id_card_number`、`avatar_media_id`、`life_photo_media_ids[]`。
 - `[DESIGN]` 申请响应只返回申请号、状态、资料展示字段、实名/人脸状态、拒绝原因、时间和版本，不返回真实姓名、身份证号或密文。
+- `[DESIGN]` 申请请求新增必填 `id_card_front_media_id/id_card_back_media_id`；响应返回对应媒体 ID 和 `MediaAssetSummary`，方便本人回显和管理员审核。
+- `[DESIGN]` 身份证照片只能使用本人上传的 `IDENTITY_CARD_FRONT/IDENTITY_CARD_BACK` 媒体；错主、错用途、已删除媒体统一返回 `MEDIA_NOT_FOUND`。
+- `[DESIGN]` 服务者申请新增 `emergency_contact_name/emergency_contact_phone`；响应只返回 `emergency_contact_name/emergency_contact_phone_masked`，不返回完整手机号。
+- `[DESIGN]` 普通用户实名接口为 `GET /api/v1/identity/real-name/me/` 和 `POST /api/v1/identity/real-name/submit/`，提交后返回 `PENDING`，不执行人脸认证。
+- `[DESIGN]` 管理员人工审核接口为 `GET /api/v1/admin/identity/verifications/` 和 `POST /api/v1/admin/identity/verifications/{verification_no}/actions/{action}/`，动作只接受 `approve/reject`，要求 `expected_version`。
+- `[DESIGN]` 服务者申请提交后也进入实名 `PENDING`，管理员通过服务者申请前必须先通过实名人工审核；服务者申请响应的 `face_status` 当前为 `NOT_SUBMITTED`。
 - `[DESIGN]` 当前最小管理员接口使用 `is_staff`，只用于开发和早期运营；正式后台必须替换为独立管理员认证、RBAC、MFA 和审计权限。
 
 ### 资讯接口
@@ -289,6 +323,73 @@
 - `[DESIGN]` 错误约定：账号或密码错误为 401 `AUTH_INVALID_CREDENTIALS`，账号状态异常为 403 `AUTH_ACCOUNT_NOT_ALLOWED`，开发开关关闭或生产环境为 404 `SYSTEM_NOT_FOUND`。
 - `[DESIGN]` 创建独立会话并支持 `Idempotency-Key`；重复同键同请求复用令牌，不同请求返回 409 `AUTH_IDEMPOTENCY_CONFLICT`。
 - `[CONFIRM]` 正式密码登录 API 不在当前版本承诺范围内，不能被 App 或生产客户端依赖。
+
+## 16. 订单实时聊天接口与 WebSocket
+
+- `[PRD]` 聊天仅围绕已建立的预约订单关系；客户端不能自行创建任意私聊或选择非订单参与人。
+- `[DESIGN]` 同一预约用户与同一服务者共享一个会话，多个有效订单复用该会话；订单接口返回的会话也是该共享会话，最新关联订单决定当前聊天状态。
+- `[DESIGN]` HTTP 路由：
+  - `GET /api/v1/orders/{order_no}/conversation/`：获取订单会话、参与人摘要和订单摘要。
+  - `GET /api/v1/messaging/conversations/providers/{provider_public_id}/`：按服务者打开或恢复当前用户可见的共享会话。
+  - `GET /api/v1/conversations/`：分页获取当前用户会话列表。
+  - `DELETE /api/v1/conversations/{conversation_id}/`：仅对当前用户隐藏会话，不删除聊天记录。
+  - `GET /api/v1/conversations/{conversation_id}/messages/`：按 `limit/before_sequence/after_sequence` 获取历史消息或断线补偿。
+  - `POST /api/v1/conversations/{conversation_id}/messages/`：发送 `TEXT` 或 `IMAGE` 消息。
+  - `POST /api/v1/conversations/{conversation_id}/read/`：更新单调递增的已读序号。
+  - `GET /api/v1/messaging/unread-summary/`：获取会话未读数汇总。
+  - `POST /api/v1/messaging/ws-ticket/`：签发短时效一次性 WebSocket 票据。
+- `[DESIGN]` 消息请求固定为 `client_message_id/message_type/content/media_id`；`client_message_id` 由客户端生成并保证同一用户同一会话内唯一，服务端按 `conversation + sender + client_message_id` 幂等。
+- `[DESIGN]` 会话响应增加 `orders/order_count`，返回双方全部聊天资格订单安全摘要；`order` 为决定当前状态的最新订单。消息创建响应包含 `message/ack`。
+- `[DESIGN]` 订单支付成功后，服务端在同一业务事务内幂等创建或恢复共享会话、双方成员和订单关联，并写入 `sender_public_id=null`、`sender_role=SYSTEM`、`message_type=SYSTEM` 的支付成功提示；服务者是否接单不影响双方打开会话。
+- `[DESIGN]` 支付成功系统消息的 `client_message_id` 固定为 `system:order-paid:<order_no>`，会出现在消息历史、双方会话列表的 `last_message` 和 `unread_count`；重复支付确认不会产生第二条消息。
+- `[DESIGN]` 历史已支付订单可执行 `python manage.py backfill_paid_order_conversations --dry-run` 核对范围，再执行不带参数的命令幂等补齐；命令重复执行复用已有会话和系统消息。
+- `[DESIGN]` 同一幂等 ID 复用首次请求内容时返回首次消息；内容不同返回 409 `MESSAGING_IDEMPOTENCY_CONFLICT`。消息响应返回服务端分配的严格递增 `sequence`。
+- `[DESIGN]` 时间字段统一返回 `YYYY-MM-DD HH:mm:ss`；消息历史采用 `sequence` 游标，不使用时间作为唯一游标。
+- `[DESIGN]` WebSocket 连接为 `/ws/messages/?ticket=<ticket>`，生产通过 `wss://`；票据由 `POST /api/v1/messaging/ws-ticket/` 获取，默认 60 秒过期、只能消费一次，URL 不接受长期 Access Token。
+- `[DESIGN]` WebSocket 连接成功后必须发送 `subscribe` 才接收该会话广播，推荐订阅帧为 `{"action":"subscribe","conversation_id":"<conversation_id>"}`；不订阅时不会主动推送任意用户会话。
+- `[DESIGN]` WebSocket 客户端事件：`subscribe`、`message.send`、`read`；服务端事件：`connection.ready`、`subscription.confirmed`、`message.ack`、`message.created`、`read.updated`、`error`。
+- `[DESIGN]` WebSocket 每次订阅都校验当前用户是否为订单会话成员；消息发送复用 HTTP 的订单状态、幂等、序号和媒体校验服务。
+- `[DESIGN]` `IMAGE` 消息只能引用发送者本人上传且 `purpose=CHAT_IMAGE` 的媒体；请求返回媒体 ID、`display_url` 和 `display_url_expires_at`，不得返回存储原路径。
+- `[DESIGN]` 订单支付成功后开放聊天；订单完成后的发送窗口由 `MESSAGING_COMPLETED_SEND_WINDOW_DAYS` 配置，默认 7 天，超过窗口只读。取消、退款或订单关闭后会话只读/关闭；新订单可恢复共享会话。
+- `[DESIGN]` `DELETE /api/v1/conversations/{conversation_id}/` 只设置当前成员的 `hidden_at`，会话和消息仍按留存策略保存；再次访问服务者会话入口可恢复可见。
+- `[PRD]` 聊天记录按要求至少保存 180 天；发送窗口结束不等于记录删除，两者是独立规则。
+- `[DESIGN]` 会话响应只返回参与人公开摘要、脱敏手机号和必要订单摘要，不返回身份证、完整手机号、精确位置或支付凭据。
+- `[CONFIRM]` 生产环境发送窗口天数、聊天撤回规则、离线推送、消息审核/敏感词策略以及 180 天后的删除和司法调取流程。
+
+## 13. 第三方登录与支付接口
+
+- `[DESIGN]` `POST /api/v1/auth/apple/login/` 请求 `identity_token/nonce/platform`，仅允许 iOS App；`POST /api/v1/auth/wechat/login/` 请求 `code/state/platform`，仅允许 App 登录。
+- `[DESIGN]` `POST /api/v1/users/me/phone-binding/` 请求 `phone/code`，响应复用令牌结构并增加 `already_bound/merged`；成功后旧第三方空账号令牌被撤销。
+- `[DESIGN]` `POST /api/v1/orders/{order_no}/pay/` 请求 `expected_version/payment_method`，支付方式枚举为 `BALANCE/WECHAT_APP/ALIPAY_APP`。余额支付同步成功，外部支付返回 `payment_action=NATIVE_PAY` 和客户端 SDK 参数。
+- `[DESIGN]` `GET /api/v1/payments/{payment_no}/` 只允许付款用户查询；微信/支付宝 notify 接口不暴露在普通业务权限体系内，必须验签、核对商户、支付单和金额并幂等处理。
+- `[DESIGN]` 外部支付单未收到有效回调前保持 `PENDING`，订单保持 `PENDING_PAYMENT`；前端不得根据 SDK 唤起成功自行把订单标记为已支付。
+- `[DESIGN]` 退款申请状态增加 `PROCESSING`，表示审核通过且原渠道退款执行中；请求幂等键、支付幂等键和退款幂等键分别隔离，不互相复用。
+
+## 13. 地点搜索接口约定
+
+- `[DESIGN]` `GET /api/v1/location-search/quick-keywords/` 返回启用中的快捷关键词，登录用户可读取 `code/label/query_keyword/icon/sort_order`。
+- `[DESIGN]` `GET /api/v1/location-search/` 接受 `keyword` 或 `quick_keyword_code`、`latitude`、`longitude`、`coordinate_system=GCJ02|WGS84`、`radius_m` 和 `limit`。
+- `[DESIGN]` 搜索响应返回 `query_keyword/center/coordinate_system/radius_m/provider/provider_total/items/filtered_count`；每个地点包含地址、POI ID、分类、经纬度、`distance_m` 和 `distance_text`。
+- `[DESIGN]` `GET/POST /api/v1/admin/location-search/quick-keywords/` 和 `PATCH/DELETE /api/v1/admin/location-search/quick-keywords/{keyword_id}/` 只允许管理员访问；创建支持 `Idempotency-Key`，修改和停用必须提交 `expected_version`。
+- `[DESIGN]` 地点搜索只读操作不使用幂等键；管理员创建使用 `Idempotency-Key + request_fingerprint`，同键同请求复用，同键不同请求返回 `LOCATION_QUICK_KEYWORD_CONFLICT`。
+- `[DESIGN]` 参数错误返回 `LOCATION_SEARCH_INVALID`，请求词不允许返回 422 `LOCATION_KEYWORD_NOT_ALLOWED`，快捷词不存在返回 `LOCATION_QUICK_KEYWORD_NOT_FOUND`，地图服务失败返回 503 `LOCATION_PROVIDER_UNAVAILABLE`，并发修改返回 409 `LOCATION_QUICK_KEYWORD_VERSION_CONFLICT`。
+- `[DESIGN]` OpenAPI 必须完整描述查询参数、坐标系枚举、距离单位、过滤数量和管理员版本字段；不得出现腾讯 Key、内部请求地址或日志字段。
+
+## 14. 位置更新、首页和订单地点接口
+
+- `[DESIGN]` `GET/PUT/DELETE /api/v1/provider/location/` 只允许已开通服务者查询、更新和撤销当前位置；响应不包含经纬度。
+- `[DESIGN]` `POST /api/v1/home/feed/` 的浏览者坐标只在请求处理期间使用，响应距离保留一位小数；原 `GET /api/v1/home/feed/` 继续支持不带位置的城市浏览。
+- `[DESIGN]` 地点搜索项增加 `selection_token/selection_expires_at`，凭证包含 POI 地址、经纬系坐标、分类和地点规则版本。
+- `[DESIGN]` `POST /api/v1/orders/quotes/` 可选提交 `location_selection_token`，`POST /api/v1/orders/` 必须提交该凭证。
+- `[DESIGN]` 订单响应新增 `meeting_location`，只向订单参与人返回完整地址和经纬度；不包含用户当前位置。
+- `[DESIGN]` 地点凭证签名错误返回 `LOCATION_SELECTION_INVALID`，过期或规则版本变化返回 `LOCATION_SELECTION_EXPIRED`。
+
+## 15. 会话身份字段
+
+- `[DESIGN]` 会话和首次身份响应返回 `primary_role/current_role/roles/default_workspace/provider_status`。
+- `[DESIGN]` `primary_role` 是当前主身份，服务者审核通过后为 `PROVIDER`；`roles` 表示可用身份，普通用户始终保留 `USER`。
+- `[DESIGN]` `initial_role` 只用于后端一次性首次身份校验，不再作为客户端当前身份展示字段。
+- `[DESIGN]` 客户端路由优先使用 `current_role/default_workspace`，避免把首次选择身份误认为当前服务者状态。
 
 ## 12. 开发测试账号密码登录
 

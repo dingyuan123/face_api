@@ -16,11 +16,14 @@ class MediaAsset(models.Model):
         PROVIDER_PROFILE_PHOTO = "PROVIDER_PROFILE_PHOTO", "服务者资料照片"
         PROVIDER_APPLICATION_AVATAR = "PROVIDER_APPLICATION_AVATAR", "服务者申请头像"
         PROVIDER_APPLICATION_LIFE_PHOTO = "PROVIDER_APPLICATION_LIFE_PHOTO", "服务者申请生活照"
+        IDENTITY_CARD_FRONT = "IDENTITY_CARD_FRONT", "实名认证身份证正面"
+        IDENTITY_CARD_BACK = "IDENTITY_CARD_BACK", "实名认证身份证反面"
         PROVIDER_SERVICE_COVER = "PROVIDER_SERVICE_COVER", "服务封面"
         PROVIDER_SERVICE_GALLERY = "PROVIDER_SERVICE_GALLERY", "服务图集"
         MOMENT_IMAGE = "MOMENT_IMAGE", "动态图片"
         MOMENT_VIDEO = "MOMENT_VIDEO", "动态视频"
         NEWS_IMAGE = "NEWS_IMAGE", "资讯图片"
+        CHAT_IMAGE = "CHAT_IMAGE", "聊天图片"
 
     class Status(models.TextChoices):
         AVAILABLE = "AVAILABLE", "可用"

@@ -1,0 +1,33 @@
+{% extends "adminops/base.html" %}
+{% block title %}实名认证审核{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>实名认证审核</h1>
+  <p class="muted">普通用户提交姓名、身份证号和正反面照片后，由管理员人工审核。</p>
+  <form method="get">
+    <label>状态筛选</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">全部</option>
+      {% for value, label in status_choices %}
+      <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <table>
+    <thead><tr><th>认证编号</th><th>用户</th><th>状态</th><th>提交时间</th><th>版本</th><th></th></tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        <td>{{ item.verification_no|default:"历史记录" }}</td>
+        <td>{{ item.user_public_id }}</td>
+        <td><span class="status {{ item.status }}">{{ item.status }}</span></td>
+        <td>{{ item.submitted_at|date:"Y-m-d H:i:s" }}</td>
+        <td>{{ item.version }}</td>
+        <td><a class="btn secondary" href="{% url 'management-identity-detail' item.verification_no %}">查看审核</a></td>
+      </tr>
+    {% empty %}<tr><td colspan="6" class="muted">暂无记录</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">共 {{ total }} 条，当前第 {{ page }} 页。</p>
+</div>
+{% endblock %}

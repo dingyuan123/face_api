@@ -60,6 +60,10 @@ class Order(models.Model):
     original_price_amount_minor = models.BigIntegerField(db_comment="服务原价，单位为分")
     discount_amount_minor = models.BigIntegerField(default=0, db_comment="订单折扣金额，单位为分")
     platform_fee_amount_minor = models.BigIntegerField(default=0, db_comment="平台服务费，单位为分")
+    platform_commission_amount_minor = models.BigIntegerField(
+        default=0,
+        db_comment="平台从服务者收入中抽取的佣金，单位为分；不增加用户应付金额",
+    )
     payable_amount_minor = models.BigIntegerField(db_comment="订单应付金额，单位为分")
     paid_amount_minor = models.BigIntegerField(default=0, db_comment="订单已支付金额，单位为分")
     refunded_amount_minor = models.BigIntegerField(default=0, db_comment="订单已退款金额，单位为分")
@@ -70,6 +74,79 @@ class Order(models.Model):
         db_comment="订单状态",
     )
     note = models.CharField(max_length=500, blank=True, default="", db_comment="用户预约备注")
+    meeting_location_poi_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_comment="订单见面地点地图 POI 标识；手动地址阶段保留为空",
+    )
+    meeting_location_name = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        db_comment="订单见面地点名称，供双方履约展示",
+    )
+    meeting_location_address = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        db_comment="订单见面地点完整地址，按订单参与人权限展示",
+    )
+    meeting_location_province = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_comment="见面地点省份名称",
+    )
+    meeting_location_city = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_comment="见面地点城市名称",
+    )
+    meeting_location_district = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_comment="见面地点区县名称",
+    )
+    meeting_location_latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        db_comment="见面地点纬度，按订单参与人权限展示",
+    )
+    meeting_location_longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        db_comment="见面地点经度，按订单参与人权限展示",
+    )
+    meeting_location_category_code = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_comment="见面地点地图分类代码，保留地点规则快照",
+    )
+    meeting_location_source = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_comment="见面地点来源，例如 TENCENT_MAP 或后续 MANUAL",
+    )
+    meeting_location_policy_version = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="下单时地点过滤规则版本，避免历史订单被新规则重算",
+    )
+    meeting_location_selected_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_comment="用户确认见面地点的时间",
+    )
     reject_reason = models.CharField(
         max_length=500, blank=True, default="", db_comment="服务者拒绝原因"
     )
@@ -159,6 +236,7 @@ class OrderRefundRequest(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "待审核"
         REJECTED = "REJECTED", "审核拒绝"
+        PROCESSING = "PROCESSING", "退款处理中"
         REFUNDED = "REFUNDED", "已退款"
         FAILED = "FAILED", "退款失败"
         CANCELED = "CANCELED", "用户撤销"
@@ -193,7 +271,7 @@ class OrderRefundRequest(models.Model):
         max_length=16,
         choices=Status.choices,
         default=Status.PENDING,
-        db_comment="退款申请状态：待审核、拒绝、已退款、失败或用户撤销",
+        db_comment="退款申请状态：待审核、拒绝、处理中、已退款、失败或用户撤销",
     )
     currency = models.CharField(max_length=3, default="CNY", db_comment="退款币种")
     refund_amount_minor = models.PositiveBigIntegerField(
@@ -253,7 +331,7 @@ class OrderRefundRequest(models.Model):
             ),
             models.UniqueConstraint(
                 fields=["order"],
-                condition=models.Q(status="PENDING"),
+                condition=models.Q(status__in=["PENDING", "PROCESSING"]),
                 name="uniq_order_refund_request_active",
             ),
             models.CheckConstraint(

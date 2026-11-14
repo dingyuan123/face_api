@@ -16,6 +16,7 @@ from backend.orders.api.serializers import (
     OrderActionRequestSerializer,
     OrderCreateRequestSerializer,
     OrderPayRequestSerializer,
+    OrderPayResponseSerializer,
     OrderQuoteRequestSerializer,
     OrderQuoteResponseSerializer,
     OrderRefundRequestCreateSerializer,
@@ -66,6 +67,8 @@ class OrderQuoteView(APIView):
                 user=request.user,
                 service_id=str(serializer.validated_data["service_id"]),
                 slot_id=str(serializer.validated_data["slot_id"]),
+                location_selection_token=serializer.validated_data.get("location_selection_token")
+                or None,
             )
         )
 
@@ -338,8 +341,21 @@ class OrderListCreateView(APIView):
             note=serializer.validated_data.get("note", ""),
             expected_service_version=serializer.validated_data["expected_service_version"],
             expected_slot_version=serializer.validated_data["expected_slot_version"],
+            location_selection_token=serializer.validated_data["location_selection_token"],
             idempotency_key=request.headers.get("Idempotency-Key"),
         )
+        if not result.reused:
+            from backend.providers.analytics import record_provider_event
+
+            record_provider_event(
+                provider_user_id=result.order.provider_user_id,
+                event_type="BOOKING_STARTED",
+                request=request._request,
+                service_public_id=(
+                    str(result.order.service.public_id) if result.order.service_id else None
+                ),
+                biz_id=str(result.order.order_no),
+            )
         return Response(
             order_payload(result.order, request),
             status=200 if result.reused else 201,
@@ -362,31 +378,29 @@ class OrderDetailView(APIView):
 
 
 class OrderPayView(APIView):
-    """钱包余额支付预约订单。"""
+    """余额、微信 App 或支付宝 App 支付预约订单。"""
 
     authentication_classes: ClassVar[list[type[BaseAuthentication]]] = [BearerTokenAuthentication]
     permission_classes: ClassVar[list[type[BasePermission]]] = [IsAuthenticated]
 
     @extend_schema(
-        summary="使用钱包余额支付订单",
+        summary="发起订单支付",
+        description=(
+            "BALANCE 同步支付成功；WECHAT_APP 和 ALIPAY_APP 返回原生 SDK 参数，"
+            "订单只有在验签回调成功后才推进到待接单。"
+        ),
         request=OrderPayRequestSerializer,
-        responses={200: dict},
+        responses={200: OrderPayResponseSerializer},
     )
     def post(self, request: Request, order_no: str) -> Response:
         serializer = OrderPayRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if serializer.validated_data["payment_method"] != "BALANCE":
-            raise ApiError(
-                ErrorCode.ORDER_INVALID,
-                ERROR_MESSAGES[ErrorCode.ORDER_INVALID],
-                status_code=400,
-                details={"payment_method": "当前仅支持 BALANCE"},
-            )
         return Response(
             pay_order(
                 user=request.user,
                 order_no=order_no,
                 expected_version=serializer.validated_data["expected_version"],
+                payment_method=serializer.validated_data["payment_method"],
                 idempotency_key=request.headers.get("Idempotency-Key"),
             )
         )

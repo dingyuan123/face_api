@@ -13,12 +13,19 @@ from django.utils import timezone
 
 from backend.accounts.models import User
 from backend.common.context import current_trace_id
-from backend.common.crypto import encrypt_text, hash_sensitive_text, sensitive_fingerprint
+from backend.common.crypto import (
+    decrypt_text,
+    encrypt_text,
+    hash_sensitive_text,
+    sensitive_fingerprint,
+)
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.identity.models import IdentityVerification
-from backend.identity.services import record_mock_verifications
+from backend.identity.services import submit_real_name_verification
 from backend.media.services import (
+    IDENTITY_CARD_BACK,
+    IDENTITY_CARD_FRONT,
     PROVIDER_APPLICATION_AVATAR,
     PROVIDER_APPLICATION_LIFE_PHOTO,
     get_available_media,
@@ -33,6 +40,7 @@ MEDIA_ID_PATTERN = re.compile(
 )
 ID_CARD_WEIGHTS = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
 ID_CARD_CHECK_CODES = "10X98765432"
+PHONE_PATTERN = re.compile(r"^1[3-9]\d{9}$")
 
 
 @dataclass(frozen=True)
@@ -54,6 +62,12 @@ def validate_application_payload(payload: dict[str, Any]) -> dict[str, Any]:
     real_name = str(payload.get("real_name", "")).strip()
     id_card_number = str(payload.get("id_card_number", "")).strip().upper()
     avatar_media_id = str(payload.get("avatar_media_id", "")).strip()
+    id_card_front_media_id = str(payload.get("id_card_front_media_id", "")).strip()
+    id_card_back_media_id = str(payload.get("id_card_back_media_id", "")).strip()
+    emergency_contact_name = str(payload.get("emergency_contact_name", "")).strip()
+    emergency_contact_phone = (
+        str(payload.get("emergency_contact_phone", "")).strip().replace(" ", "")
+    )
     life_photo_media_ids = payload.get("life_photo_media_ids", [])
 
     introduction_min = settings.PROVIDER_APPLICATION_INTRODUCTION_MIN_LENGTH
@@ -66,6 +80,14 @@ def validate_application_payload(payload: dict[str, Any]) -> dict[str, Any]:
         details["id_card_number"] = "身份证号格式不正确"
     if not MEDIA_ID_PATTERN.fullmatch(avatar_media_id):
         details["avatar_media_id"] = "头像资源标识不正确"
+    if not MEDIA_ID_PATTERN.fullmatch(id_card_front_media_id):
+        details["id_card_front_media_id"] = "身份证正面照片资源标识不正确"
+    if not MEDIA_ID_PATTERN.fullmatch(id_card_back_media_id):
+        details["id_card_back_media_id"] = "身份证反面照片资源标识不正确"
+    if not REAL_NAME_PATTERN.fullmatch(emergency_contact_name):
+        details["emergency_contact_name"] = "紧急联系人姓名格式不正确"
+    if not PHONE_PATTERN.fullmatch(emergency_contact_phone):
+        details["emergency_contact_phone"] = "紧急联系人手机号格式不正确"
 
     photo_min = settings.PROVIDER_APPLICATION_MIN_LIFE_PHOTOS
     photo_max = settings.PROVIDER_APPLICATION_MAX_LIFE_PHOTOS
@@ -95,6 +117,10 @@ def validate_application_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "real_name": real_name,
         "id_card_number": id_card_number,
         "avatar_media_id": avatar_media_id,
+        "id_card_front_media_id": id_card_front_media_id,
+        "id_card_back_media_id": id_card_back_media_id,
+        "emergency_contact_name": emergency_contact_name,
+        "emergency_contact_phone": emergency_contact_phone,
         "life_photo_media_ids": normalized_photos,
     }
 
@@ -139,10 +165,32 @@ def _validate_media_assets(user: User, payload: dict[str, Any]) -> None:
         purpose=PROVIDER_APPLICATION_LIFE_PHOTO,
         media_ids=payload["life_photo_media_ids"],
     )
+    get_available_media(
+        user=user,
+        purpose=IDENTITY_CARD_FRONT,
+        media_ids=[payload["id_card_front_media_id"]],
+    )
+    get_available_media(
+        user=user,
+        purpose=IDENTITY_CARD_BACK,
+        media_ids=[payload["id_card_back_media_id"]],
+    )
 
 
 def _mark_media_referenced(payload: dict[str, Any]) -> None:
-    mark_media_referenced([payload["avatar_media_id"], *payload["life_photo_media_ids"]])
+    mark_media_referenced(
+        [
+            payload["avatar_media_id"],
+            payload["id_card_front_media_id"],
+            payload["id_card_back_media_id"],
+            *payload["life_photo_media_ids"],
+        ]
+    )
+
+
+def _mask_phone(value: str) -> str:
+    """返回不泄露完整号码的紧急联系人手机号展示值。"""
+    return f"{value[:3]}****{value[-4:]}" if len(value) >= 7 else "****"
 
 
 def submit_provider_application(
@@ -193,11 +241,24 @@ def submit_provider_application(
                 )
             _validate_media_assets(user, payload)
 
-            verification_results = record_mock_verifications(
-                user,
-                real_name=payload["real_name"],
-                id_card_number=payload["id_card_number"],
-            )
+            existing_identity = IdentityVerification.objects.filter(
+                user=user,
+                verification_type=IdentityVerification.Type.REAL_NAME,
+            ).first()
+            if (
+                existing_identity is not None
+                and existing_identity.status == IdentityVerification.Status.PASSED
+            ):
+                real_name_verification = existing_identity
+            else:
+                real_name_verification = submit_real_name_verification(
+                    user=user,
+                    payload=payload,
+                    expected_version=existing_identity.version if existing_identity else 0,
+                    idempotency_key=(
+                        f"provider-real-name:{hash_sensitive_text(payload['id_card_number'])}"
+                    ),
+                )
             application = ProviderApplication.objects.create(
                 application_no=ProviderApplication.make_application_no(),
                 user=user,
@@ -206,10 +267,15 @@ def submit_provider_application(
                 real_name_encrypted=encrypt_text(payload["real_name"]),
                 id_card_encrypted=encrypt_text(payload["id_card_number"]),
                 id_card_hash=hash_sensitive_text(payload["id_card_number"]),
+                id_card_front_media_id=payload["id_card_front_media_id"],
+                id_card_back_media_id=payload["id_card_back_media_id"],
+                emergency_contact_name_encrypted=encrypt_text(payload["emergency_contact_name"]),
+                emergency_contact_phone_encrypted=encrypt_text(payload["emergency_contact_phone"]),
+                emergency_contact_phone_masked=_mask_phone(payload["emergency_contact_phone"]),
                 avatar_media_id=payload["avatar_media_id"],
                 life_photo_media_ids=payload["life_photo_media_ids"],
-                real_name_status=verification_results[IdentityVerification.Type.REAL_NAME].status,
-                face_status=verification_results[IdentityVerification.Type.FACE].status,
+                real_name_status=real_name_verification.status,
+                face_status=IdentityVerification.Status.NOT_SUBMITTED,
                 idempotency_key=normalized_key,
                 request_fingerprint=fingerprint,
             )
@@ -303,22 +369,42 @@ def update_application(
             )
         _validate_media_assets(user, payload)
 
-        verification_results = record_mock_verifications(
-            user,
-            real_name=payload["real_name"],
-            id_card_number=payload["id_card_number"],
-        )
+        existing_identity = IdentityVerification.objects.filter(
+            user=user,
+            verification_type=IdentityVerification.Type.REAL_NAME,
+        ).first()
+        if (
+            existing_identity is not None
+            and existing_identity.status == IdentityVerification.Status.PASSED
+        ):
+            real_name_verification = existing_identity
+        else:
+            real_name_verification = submit_real_name_verification(
+                user=user,
+                payload=payload,
+                expected_version=existing_identity.version if existing_identity else 0,
+                idempotency_key=(
+                    f"provider-real-name:{hash_sensitive_text(payload['id_card_number'])}"
+                ),
+            )
         previous_status = application.status
         application.introduction = payload["introduction"]
         application.real_name_encrypted = encrypt_text(payload["real_name"])
         application.id_card_encrypted = encrypt_text(payload["id_card_number"])
         application.id_card_hash = hash_sensitive_text(payload["id_card_number"])
+        application.id_card_front_media_id = payload["id_card_front_media_id"]
+        application.id_card_back_media_id = payload["id_card_back_media_id"]
+        application.emergency_contact_name_encrypted = encrypt_text(
+            payload["emergency_contact_name"]
+        )
+        application.emergency_contact_phone_encrypted = encrypt_text(
+            payload["emergency_contact_phone"]
+        )
+        application.emergency_contact_phone_masked = _mask_phone(payload["emergency_contact_phone"])
         application.avatar_media_id = payload["avatar_media_id"]
         application.life_photo_media_ids = payload["life_photo_media_ids"]
-        application.real_name_status = verification_results[
-            IdentityVerification.Type.REAL_NAME
-        ].status
-        application.face_status = verification_results[IdentityVerification.Type.FACE].status
+        application.real_name_status = real_name_verification.status
+        application.face_status = IdentityVerification.Status.NOT_SUBMITTED
         application.status = ProviderApplication.Status.PENDING
         application.reject_reason = ""
         application.version += 1
@@ -378,6 +464,22 @@ def review_application(
                 ERROR_MESSAGES[ErrorCode.PROVIDER_APPLICATION_VERSION_CONFLICT],
                 status_code=409,
             )
+        if approve:
+            identity = IdentityVerification.objects.filter(
+                user=application.user,
+                verification_type=IdentityVerification.Type.REAL_NAME,
+            ).first()
+            if identity is None or identity.status != IdentityVerification.Status.PASSED:
+                raise ApiError(
+                    ErrorCode.PROVIDER_APPLICATION_STATE_INVALID,
+                    "实名认证尚未人工审核通过，不能通过服务者申请",
+                    status_code=409,
+                    details={
+                        "real_name_status": identity.status
+                        if identity
+                        else IdentityVerification.Status.NOT_SUBMITTED
+                    },
+                )
         previous_status = application.status
         application.status = (
             ProviderApplication.Status.APPROVED if approve else ProviderApplication.Status.REJECTED
@@ -402,11 +504,13 @@ def review_application(
         if approve:
             application.user.provider_enabled = True
             application.user.provider_status = User.ProviderStatus.APPROVED
+            application.user.primary_role = User.InitialRole.PROVIDER
             application.user.default_workspace = User.Workspace.PROVIDER_WORKSPACE
             application.user.save(
                 update_fields=[
                     "provider_enabled",
                     "provider_status",
+                    "primary_role",
                     "default_workspace",
                     "updated_at",
                 ]
@@ -429,6 +533,10 @@ def application_payload(
             "status": "NOT_SUBMITTED",
             "introduction": "",
             "avatar_media_id": None,
+            "id_card_front_media_id": None,
+            "id_card_back_media_id": None,
+            "emergency_contact_name": "",
+            "emergency_contact_phone_masked": "",
             "life_photo_media_ids": [],
             "real_name_status": "NOT_SUBMITTED",
             "face_status": "NOT_SUBMITTED",
@@ -439,15 +547,37 @@ def application_payload(
             "user_public_id": str(user.public_id),
             "user_phone_masked": user.phone_masked,
             "avatar_media": None,
+            "id_card_front_media": None,
+            "id_card_back_media": None,
             "life_photo_media": [],
         }
-    avatar_media = get_media_payloads([application.avatar_media_id], request)
-    life_photo_media = get_media_payloads(application.life_photo_media_ids, request)
+    avatar_media = get_media_payloads(
+        [application.avatar_media_id] if application.avatar_media_id else [],
+        request,
+    )
+    id_card_front_media = get_media_payloads(
+        [application.id_card_front_media_id] if application.id_card_front_media_id else [],
+        request,
+    )
+    id_card_back_media = get_media_payloads(
+        [application.id_card_back_media_id] if application.id_card_back_media_id else [],
+        request,
+    )
+    life_photo_media = get_media_payloads(
+        [media_id for media_id in application.life_photo_media_ids if media_id],
+        request,
+    )
     return {
         "application_no": application.application_no,
         "status": application.status,
         "introduction": application.introduction,
         "avatar_media_id": application.avatar_media_id,
+        "id_card_front_media_id": application.id_card_front_media_id or None,
+        "id_card_back_media_id": application.id_card_back_media_id or None,
+        "emergency_contact_name": decrypt_text(application.emergency_contact_name_encrypted)
+        if application.emergency_contact_name_encrypted
+        else "",
+        "emergency_contact_phone_masked": application.emergency_contact_phone_masked,
         "life_photo_media_ids": application.life_photo_media_ids,
         "real_name_status": application.real_name_status,
         "face_status": application.face_status,
@@ -458,5 +588,7 @@ def application_payload(
         "user_public_id": str(user.public_id),
         "user_phone_masked": user.phone_masked,
         "avatar_media": avatar_media[0] if avatar_media else None,
+        "id_card_front_media": id_card_front_media[0] if id_card_front_media else None,
+        "id_card_back_media": id_card_back_media[0] if id_card_back_media else None,
         "life_photo_media": life_photo_media,
     }

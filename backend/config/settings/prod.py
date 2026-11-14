@@ -1,6 +1,6 @@
 from django.core.exceptions import ImproperlyConfigured
 
-from backend.common.env import get_list, get_text, require_envs
+from backend.common.env import get_bool, get_list, get_text, require_envs
 
 from .base import *  # noqa: F403
 
@@ -19,6 +19,8 @@ require_envs(
         "PHONE_HASH_KEY",
         "CORS_ALLOWED_ORIGINS",
         "IDENTITY_ENCRYPTION_KEY",
+        "LOCATION_ENCRYPTION_KEY",
+        "LOCATION_SELECTION_SIGNING_KEY",
         "MEDIA_URL_SIGNING_KEY",
         "PAYMENT_MODE",
         "PAYOUT_MODE",
@@ -39,12 +41,46 @@ if PHONE_HASH_KEY in {"", "dev-only-phone-hash-key"}:  # noqa: F405
     raise ImproperlyConfigured("生产环境 PHONE_HASH_KEY 不能使用开发默认值。")
 if IDENTITY_ENCRYPTION_KEY in {"", "dev-only-identity-encryption-key-change-me"}:  # noqa: F405
     raise ImproperlyConfigured("生产环境 IDENTITY_ENCRYPTION_KEY 不能使用开发默认值。")
+if LOCATION_ENCRYPTION_KEY in {"", "dev-only-location-encryption-key-change-me"}:  # noqa: F405
+    raise ImproperlyConfigured("生产环境 LOCATION_ENCRYPTION_KEY 不能使用开发默认值。")
+if LOCATION_SELECTION_SIGNING_KEY in {  # noqa: F405
+    "",
+    "dev-only-location-selection-key-change-me",
+}:
+    raise ImproperlyConfigured("生产环境 LOCATION_SELECTION_SIGNING_KEY 不能使用开发默认值。")
 if IDENTITY_MOCK_ENABLED:  # noqa: F405
     raise ImproperlyConfigured("生产环境禁止启用身份认证 Mock。")
 if MEDIA_URL_SIGNING_KEY in {"", "dev-only-media-url-signing-key-change-me"}:  # noqa: F405
     raise ImproperlyConfigured("生产环境 MEDIA_URL_SIGNING_KEY 不能使用开发默认值。")
 if PAYMENT_MODE == "MOCK_BALANCE" or ENABLE_DEV_WALLET_TOPUP:  # noqa: F405
     raise ImproperlyConfigured("生产环境禁止启用测试余额充值或 MOCK 支付模式。")
+if PAYMENT_GATEWAY_MODE not in {"MOCK", "REAL"}:  # noqa: F405
+    raise ImproperlyConfigured("PAYMENT_GATEWAY_MODE 只能是 MOCK 或 REAL。")
+if PAYMENT_GATEWAY_MODE == "MOCK":  # noqa: F405
+    raise ImproperlyConfigured("生产环境禁止使用模拟外部支付渠道。")
+conditional_required = []
+if PAYMENT_GATEWAY_MODE == "REAL":  # noqa: F405
+    conditional_required.extend(
+        [
+            "WECHAT_PAY_MCH_ID",
+            "WECHAT_PAY_APP_ID",
+            "WECHAT_PAY_API_V3_KEY",
+            "WECHAT_PAY_MERCHANT_SERIAL_NO",
+            "WECHAT_PAY_PRIVATE_KEY",
+            "WECHAT_PAY_PLATFORM_PUBLIC_KEY",
+            "WECHAT_PAY_PLATFORM_PUBLIC_KEY_ID",
+            "WECHAT_PAY_NOTIFY_URL",
+            "ALIPAY_APP_ID",
+            "ALIPAY_PRIVATE_KEY",
+            "ALIPAY_PUBLIC_KEY",
+            "ALIPAY_NOTIFY_URL",
+        ]
+    )
+if get_bool("APPLE_LOGIN_ENABLED", True):
+    conditional_required.append("APPLE_CLIENT_ID")
+if get_bool("WECHAT_LOGIN_ENABLED", True):
+    conditional_required.extend(["WECHAT_LOGIN_APP_ID", "WECHAT_LOGIN_APP_SECRET"])
+require_envs(conditional_required)
 if PAYOUT_MODE != "REAL" or PAYOUT_VERIFICATION_MODE != "REAL":  # noqa: F405
     raise ImproperlyConfigured("生产环境禁止使用模拟收款验证或模拟打款。")
 

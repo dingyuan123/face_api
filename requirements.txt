@@ -8,6 +8,11 @@ django-redis>=5.4,<6
 python-dotenv>=1.0,<2
 gunicorn>=23,<24
 django-cors-headers>=4.4,<5
+channels>=4.2,<5
+channels-redis>=4.3,<5
+daphne>=4.2,<5
 cryptography>=42,<46
+PyJWT[crypto]>=2.10,<3
 Pillow>=11,<13
+qrcode>=7.4,<9
 

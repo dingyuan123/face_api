@@ -15,4 +15,6 @@ build/
 var/media/
 var/test-media/
 var/media/
+secret/
+h5/.DS_Store
 

@@ -1,0 +1,21 @@
+{% extends "adminops/base.html" %}
+{% block title %}总览 · 测试管理后台{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>审核工作台</h1>
+  <p class="muted">先查看待审核量，再进入实名认证和服务者入驻处理。</p>
+  <div class="grid">
+    <div class="stat"><span>实名认证总数</span><b>{{ identity_total }}</b></div>
+    <div class="stat"><span>实名待审核</span><b>{{ identity_counts.PENDING|default:0 }}</b></div>
+    <div class="stat"><span>服务者申请总数</span><b>{{ provider_total }}</b></div>
+    <div class="stat"><span>服务者待审核</span><b>{{ provider_counts.PENDING|default:0 }}</b></div>
+  </div>
+</div>
+<div class="card">
+  <h2>快捷入口</h2>
+  <p>
+    <a class="btn primary" href="{% url 'management-identity-list' %}">处理实名认证</a>
+    <a class="btn secondary" href="{% url 'management-provider-list' %}">处理服务者申请</a>
+  </p>
+</div>
+{% endblock %}

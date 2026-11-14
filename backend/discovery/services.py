@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from django.conf import settings
@@ -12,6 +13,7 @@ from backend.catalog.models import ProviderService, ServiceCategory
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.content.models import Moment
+from backend.locations.services import get_provider_location_coordinates
 from backend.media.services import get_media_payloads, get_recent_media_payloads
 from backend.providers.models import ProviderProfile
 
@@ -131,6 +133,7 @@ def _related_media_ids(profile: ProviderProfile) -> list[str]:
 def home_card_payload(
     profile: ProviderProfile,
     request: HttpRequest | None = None,
+    viewer_coordinates: tuple[float, float] | None = None,
 ) -> dict[str, Any]:
     """生成首页服务者卡片，照片只返回最近 3 到 5 张相关媒体。"""
 
@@ -158,6 +161,18 @@ def home_card_payload(
             verification["real_name_status"] = item.status
         if item.verification_type == "FACE":
             verification["face_status"] = item.status
+    distance_km = None
+    distance_text = None
+    provider_coordinates = get_provider_location_coordinates(user)
+    if viewer_coordinates and provider_coordinates:
+        distance_m = _distance_meters(
+            viewer_coordinates[0],
+            viewer_coordinates[1],
+            provider_coordinates[0],
+            provider_coordinates[1],
+        )
+        distance_km = round(distance_m / 1000, 1)
+        distance_text = f"{distance_km:.1f}公里"
     return {
         "provider_public_id": str(user.public_id),
         "provider": {
@@ -186,7 +201,8 @@ def home_card_payload(
         ],
         "verification": verification,
         "online_status": "UNKNOWN",
-        "distance_km": None,
+        "distance_km": distance_km,
+        "distance_text": distance_text,
         "rating": None,
     }
 
@@ -194,7 +210,31 @@ def home_card_payload(
 def home_feed_payloads(
     profiles: list[ProviderProfile],
     request: HttpRequest | None = None,
+    viewer_coordinates: tuple[float, float] | None = None,
 ) -> list[dict[str, Any]]:
     """为当前页服务者生成首页卡片。"""
 
-    return [home_card_payload(profile, request) for profile in profiles]
+    return [
+        home_card_payload(profile, request, viewer_coordinates=viewer_coordinates)
+        for profile in profiles
+    ]
+
+
+def _distance_meters(
+    latitude_a: float,
+    longitude_a: float,
+    latitude_b: float,
+    longitude_b: float,
+) -> int:
+    """计算首页卡片与浏览者之间的直线距离，单位为米。"""
+
+    earth_radius_m = 6_371_008.8
+    latitude_a_rad = math.radians(latitude_a)
+    latitude_b_rad = math.radians(latitude_b)
+    latitude_delta = latitude_b_rad - latitude_a_rad
+    longitude_delta = math.radians(longitude_b - longitude_a)
+    value = (
+        math.sin(latitude_delta / 2) ** 2
+        + math.cos(latitude_a_rad) * math.cos(latitude_b_rad) * math.sin(longitude_delta / 2) ** 2
+    )
+    return round(earth_radius_m * 2 * math.atan2(math.sqrt(value), math.sqrt(1 - value)))

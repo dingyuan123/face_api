@@ -114,6 +114,7 @@ from backend.discovery.api.serializers import (
     AdminTrendingUpdateResponseSerializer,
     AdminTrendingUpdateSerializer,
     HomeFeedItemSerializer,
+    HomeFeedLocationRequestSerializer,
     HomeProviderSerializer,
     HomeServiceSerializer,
     HomeVerificationSerializer,
@@ -129,17 +130,60 @@ from backend.discovery.api.serializers import (
 )
 from backend.discovery.models import SearchQueryStat, SearchTrendingKeyword
 from backend.identity.models import IdentityVerification
+from backend.locations.api.serializers import (
+    LocationQuickKeywordAdminListResponseSerializer,
+    LocationQuickKeywordAdminResponseSerializer,
+    LocationQuickKeywordCreateSerializer,
+    LocationQuickKeywordDeactivateSerializer,
+    LocationQuickKeywordListResponseSerializer,
+    LocationQuickKeywordResponseSerializer,
+    LocationQuickKeywordUpdateSerializer,
+    LocationSearchItemSerializer,
+    LocationSearchQuerySerializer,
+    LocationSearchResponseSerializer,
+    ProviderLocationStatusResponseSerializer,
+    ProviderLocationUpdateSerializer,
+)
+from backend.locations.models import (
+    LocationSearchKeyword,
+    LocationSearchRule,
+    ProviderLocationState,
+)
 from backend.media.api.serializers import (
     MediaAssetResponseSerializer,
     MediaAssetSummarySerializer,
     MediaUploadRequestSerializer,
 )
 from backend.media.models import MediaAsset
+from backend.messaging.api.serializers import (
+    ChatOrderSummarySerializer,
+    ChatUserSummarySerializer,
+    ConversationListResponseSerializer,
+    ConversationReadRequestSerializer,
+    ConversationReadResponseSerializer,
+    ConversationResponseSerializer,
+    MessageAckSerializer,
+    MessageCreateRequestSerializer,
+    MessageCreateResponseSerializer,
+    MessageListResponseSerializer,
+    MessageResponseSerializer,
+    UnreadConversationSerializer,
+    UnreadSummaryResponseSerializer,
+    WebSocketTicketResponseSerializer,
+)
+from backend.messaging.models import (
+    Conversation,
+    ConversationMember,
+    Message,
+    MessageDelivery,
+    MessagingConnectionTicket,
+)
 from backend.orders.api.serializers import (
     OrderActionRequestSerializer,
     OrderContactSerializer,
     OrderCreateRequestSerializer,
     OrderCustomerParticipantSerializer,
+    OrderMeetingLocationSerializer,
     OrderNextActionSerializer,
     OrderParticipantsSerializer,
     OrderPayRequestSerializer,
@@ -324,9 +368,16 @@ BUSINESS_MODULES = [
     "backend/social/services.py",
     "backend/scheduling/services.py",
     "backend/orders/services.py",
+    "backend/messaging/services.py",
+    "backend/messaging/consumers.py",
+    "backend/messaging/tasks.py",
     "backend/reviews/services.py",
     "backend/payouts/services.py",
     "backend/payouts/adapters.py",
+    "backend/locations/services.py",
+    "backend/integrations/geo/contracts.py",
+    "backend/integrations/geo/coordinates.py",
+    "backend/integrations/geo/tencent.py",
     "backend/common/crypto.py",
     "backend/common/search.py",
 ]
@@ -372,6 +423,9 @@ MODEL_CLASSES = [
     NewsSyncRun,
     SearchQueryStat,
     SearchTrendingKeyword,
+    LocationSearchKeyword,
+    LocationSearchRule,
+    ProviderLocationState,
     WalletAccount,
     WalletTransaction,
     WalletTopUp,
@@ -387,6 +441,11 @@ MODEL_CLASSES = [
     OrderRefundRequest,
     OrderScheduleSlot,
     OrderStatusLog,
+    Conversation,
+    ConversationMember,
+    Message,
+    MessagingConnectionTicket,
+    MessageDelivery,
     ReviewTag,
     Review,
     ReviewTagLink,
@@ -455,10 +514,23 @@ SERIALIZER_CLASSES = [
     AdminTrendingListResponseSerializer,
     AdminTrendingCreateSerializer,
     AdminTrendingUpdateSerializer,
+    LocationSearchQuerySerializer,
+    LocationSearchItemSerializer,
+    LocationSearchResponseSerializer,
+    LocationQuickKeywordResponseSerializer,
+    LocationQuickKeywordListResponseSerializer,
+    LocationQuickKeywordAdminResponseSerializer,
+    LocationQuickKeywordAdminListResponseSerializer,
+    LocationQuickKeywordCreateSerializer,
+    LocationQuickKeywordUpdateSerializer,
+    LocationQuickKeywordDeactivateSerializer,
+    ProviderLocationUpdateSerializer,
+    ProviderLocationStatusResponseSerializer,
     HomeProviderSerializer,
     HomeServiceSerializer,
     HomeVerificationSerializer,
     HomeFeedItemSerializer,
+    HomeFeedLocationRequestSerializer,
     ProviderProfileInputSerializer,
     ProviderProfileResponseSerializer,
     ProviderProfileUpdateResponseSerializer,
@@ -501,6 +573,7 @@ SERIALIZER_CLASSES = [
     OrderCreateRequestSerializer,
     OrderContactSerializer,
     OrderCustomerParticipantSerializer,
+    OrderMeetingLocationSerializer,
     OrderNextActionSerializer,
     OrderPayRequestSerializer,
     OrderParticipantsSerializer,
@@ -578,6 +651,20 @@ SERIALIZER_CLASSES = [
     WithdrawalPayoutMethodSerializer,
     WithdrawalResponseSerializer,
     WithdrawalListResponseSerializer,
+    ChatUserSummarySerializer,
+    ChatOrderSummarySerializer,
+    MessageResponseSerializer,
+    ConversationResponseSerializer,
+    ConversationListResponseSerializer,
+    MessageListResponseSerializer,
+    MessageCreateRequestSerializer,
+    MessageCreateResponseSerializer,
+    MessageAckSerializer,
+    ConversationReadRequestSerializer,
+    ConversationReadResponseSerializer,
+    UnreadConversationSerializer,
+    UnreadSummaryResponseSerializer,
+    WebSocketTicketResponseSerializer,
 ]
 
 
@@ -692,3 +779,42 @@ def test_dev_password_login_openapi_documents_development_contract() -> None:
     assert "仅供开发测试" in login_contract
     assert "生产环境强制禁用" in login_contract
     assert "$ref: '#/components/schemas/DevPasswordLoginRequestRequest'" in login_contract
+
+
+def test_location_search_openapi_documents_query_and_response_contracts() -> None:
+    schema = (PROJECT_ROOT / "openapi.yaml").read_text(encoding="utf-8")
+    for endpoint in (
+        "/api/v1/location-search/quick-keywords/:",
+        "/api/v1/location-search/:",
+        "/api/v1/provider/location/:",
+        "/api/v1/admin/location-search/quick-keywords/:",
+        "/api/v1/admin/location-search/quick-keywords/{keyword_id}/:",
+    ):
+        assert endpoint in schema
+    search_contract = schema.split("/api/v1/location-search/:", 1)[1].split(
+        "/api/v1/admin/location-search/quick-keywords/:",
+        1,
+    )[0]
+    for parameter in (
+        "name: keyword",
+        "name: quick_keyword_code",
+        "name: latitude",
+        "name: longitude",
+        "name: coordinate_system",
+        "name: radius_m",
+        "name: limit",
+    ):
+        assert parameter in search_contract
+    for response_model in (
+        "LocationSearchResponse:",
+        "LocationSearchItem:",
+        "LocationQuickKeywordListResponse:",
+        "LocationQuickKeywordAdminListResponse:",
+        "ProviderLocationStatusResponse:",
+        "OrderMeetingLocation:",
+        "HomeFeedLocationRequestRequest:",
+    ):
+        assert response_model in schema
+    assert "listHomeFeedWithLocation" in schema
+    assert "selection_token:" in schema
+    assert "meeting_location:" in schema

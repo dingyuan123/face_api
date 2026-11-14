@@ -670,6 +670,14 @@ def get_public_service_payload(
             status_code=404,
             details={"service_id": "服务不存在或不可见"},
         )
+    from backend.providers.analytics import record_provider_event
+
+    record_provider_event(
+        provider_user_id=service.provider_user_id,
+        event_type="SERVICE_VIEW",
+        request=request,
+        service_public_id=str(service.public_id),
+    )
     return service_payload(service, request)
 
 

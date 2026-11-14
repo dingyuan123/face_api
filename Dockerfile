@@ -18,4 +18,4 @@ USER app
 
 EXPOSE 8000
 
-CMD ["gunicorn", "backend.config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]
+CMD ["python", "-m", "daphne", "-b", "0.0.0.0", "-p", "8000", "backend.config.asgi:application"]

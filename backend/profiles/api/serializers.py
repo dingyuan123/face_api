@@ -117,3 +117,43 @@ class ProfileSummaryResponseSerializer(serializers.Serializer):
     follower_count = serializers.IntegerField(help_text="关注我的用户总数")
     order_status_counts = serializers.DictField(help_text="用户订单状态数量")
     provider_order_status_counts = serializers.DictField(help_text="服务者订单状态数量")
+
+
+class ProfileShareSerializer(serializers.Serializer):
+    """分享链接和未来微信分享卡片字段。"""
+
+    link_url = serializers.CharField(help_text="复制链接使用的公开个人主页地址")
+    title = serializers.CharField(help_text="微信分享标题，微信分享接入后使用")
+    description = serializers.CharField(help_text="微信分享描述，微信分享接入后使用")
+
+
+class ProfileSharePosterResponseSerializer(serializers.Serializer):
+    """前端绘制个人分享海报所需的数据。"""
+
+    brand_name = serializers.CharField(help_text="海报品牌行")
+    brand_label = serializers.CharField(help_text="海报右上角品牌小字")
+    slogan_line_1 = serializers.CharField(help_text="主文案第一行")
+    slogan_line_2 = serializers.CharField(help_text="主文案第二行高亮文案")
+    slogan_subtitle = serializers.CharField(help_text="主文案下方说明句")
+    cover = MediaAssetSummarySerializer(
+        allow_null=True,
+        help_text="海报主视觉图；当前优先使用个人头像，没有头像时为空",
+    )
+    nickname = serializers.CharField(help_text="用户昵称；未填写时使用默认展示名")
+    age = serializers.IntegerField(allow_null=True, help_text="用户填写年龄；未填写时为空")
+    city = serializers.CharField(help_text="城市展示名称，无配置时回退为城市代码")
+    signature = serializers.CharField(help_text="个人个性签名，可为空字符串")
+    interest_tags = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="兴趣标签展示名称，最多 5 个",
+    )
+    profile_url = serializers.CharField(help_text="用户主页公开链接，用于生成二维码")
+    qr_image_url = serializers.CharField(
+        help_text="后端生成的二维码图片短期地址，可直接用图片组件加载",
+    )
+    qr_image_expires_at = serializers.CharField(
+        help_text="二维码图片地址过期时间，格式 YYYY-MM-DD HH:mm:ss",
+    )
+    card_footer = serializers.CharField(help_text="卡片底部提示文案")
+    bottom_slogan = serializers.CharField(help_text="海报底部标语")
+    share = ProfileShareSerializer(help_text="复制链接和微信分享卡片字段")

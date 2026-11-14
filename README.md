@@ -2,7 +2,7 @@
 
 见面聊后端是基于 Python 3.12、Django、Django REST Framework、PostgreSQL、Redis 和 Celery 的模块化单体服务。当前仓库已建立工程基础，包括统一 API 响应、请求追踪、日志脱敏、健康检查、OpenAPI、pytest、Ruff、迁移流程和 Docker Compose 开发编排。
 
-当前阶段包含手机号验证码登录/自动注册和令牌会话基础能力，不包含密码、微信/Apple 登录、订单、支付、退款、结算、推广奖励等完整业务模块。
+当前仓库包含手机号、Apple、微信登录，以及服务者、排期、订单、支付、退款、评价、资讯、地址搜索和订单实时聊天等业务能力。各模块的完成范围和待接入事项以 `docs/development-roadmap.md`、`docs/open-questions.md` 为准。
 
 ## 技术环境
 
@@ -104,11 +104,17 @@ python -m venv .venv
 .\.venv\Scripts\python.exe manage.py migrate --noinput
 ```
 
-### 6. 启动 API
+每次拉取、同步或更新后端代码后，都要重新执行数据库迁移。代码中的模型已经更新，但数据库不会自动应用新的迁移文件。
+
+### 6. 启动 HTTP + WebSocket API
 
 ```powershell
-.\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000
+.\.venv\Scripts\python.exe -m daphne -b 0.0.0.0 -p 8000 backend.config.asgi:application
 ```
+
+以后本地开发和联调统一使用上面的 Daphne 命令启动 API，它同时处理 HTTP 和 WebSocket。
+`manage.py runserver` 只适合临时调试纯 HTTP 接口；如果使用它，订单聊天 WebSocket 无法正常联调。
+使用 Docker Compose 启动时不需要手动执行 Daphne，Compose 已配置自动使用 ASGI 启动。
 
 服务启动后访问：
 
@@ -132,6 +138,16 @@ cd D:\即享\face_api
 如果直接执行 `celery.exe` 时出现“应用程序控制策略已阻止此文件”，请使用上面的 Python 模块方式启动，不要关闭或绕过系统安全策略。
 
 Windows 开发环境建议使用 `--pool=solo`。Worker 启动后会保持运行，不能关闭该终端。
+
+### 8. 订单实时聊天联调
+
+1. 先调用 `POST /api/v1/messaging/ws-ticket/` 获取一次性票据。
+2. WebSocket 连接地址为 `ws://localhost:8000/ws/messages/?ticket=<ticket>`；Cloudflare Tunnel 使用 `wss://`。
+3. 连接后发送 `{"action":"subscribe","conversation_id":"<会话 UUID>"}` 订阅订单会话。
+4. 发送文本消息使用 `{"action":"message.send","conversation_id":"...","message_type":"TEXT","content":"你好","client_message_id":"..."}`。
+5. 断线后用 `GET /api/v1/conversations/<会话 UUID>/messages/?after_sequence=<上次序号>` 补偿消息。
+
+票据只能使用一次且默认 60 秒过期；不能把长期 Access Token 放在 WebSocket URL 中。
 
 ## Docker Compose 启动
 
@@ -207,6 +223,36 @@ Invoke-RestMethod -Uri http://localhost:8000/api/v1/users/me/ `
 
 所有数据库结构修改都必须经过迁移文件。不要手工改表，不要删除已经发布的迁移。
 
+启动服务前可以检查是否存在未应用迁移：
+
+```powershell
+.\.venv\Scripts\python.exe manage.py showmigrations
+```
+
+如果计划任务或启动日志提示 `You have unapplied migration(s)`，执行：
+
+```powershell
+.\.venv\Scripts\python.exe manage.py migrate --noinput
+```
+
+## 用户协议和隐私政策
+
+用户服务协议和隐私政策已作为无需登录的公开页面托管：
+
+- 用户服务协议：<http://localhost:8000/terms/>
+- 隐私政策：<http://localhost:8000/privacy/>
+- 规范地址：<http://localhost:8000/legal/terms/>
+- 规范地址：<http://localhost:8000/legal/privacy/>
+
+部署到 Cloudflare Tunnel 或正式域名后，将 `localhost:8000` 替换为实际域名即可，例如：
+
+```text
+https://你的域名/terms/
+https://你的域名/privacy/
+```
+
+这些地址不需要登录，允许浏览器和 App WebView 直接访问。当前文档中的正式发布日期、生效日期、公司联系方式仍包含待填写内容，对外发布前需要由业务或法务负责人确认。
+
 ## 常见问题
 
 ### `redis-cli ping` 没有返回 `PONG`
@@ -216,6 +262,23 @@ Invoke-RestMethod -Uri http://localhost:8000/api/v1/users/me/ `
 ### `manage.py migrate` 无法连接数据库
 
 检查 PostgreSQL 服务是否启动、`POSTGRES_HOST`、`POSTGRES_PORT`、数据库名、用户名和密码是否正确。当前项目不使用 MySQL。
+
+### 微信或 Apple 登录返回 `500`，提示 `phone_hash` 不能为空
+
+这通常不是第三方登录失败，而是后端代码已经允许第三方账号暂时没有手机号，但数据库还没有应用对应迁移。日志可能包含：
+
+```text
+IntegrityError: null value in column "phone_hash" of relation "auth_login_requests" violates not-null constraint
+```
+
+解决方法：
+
+```powershell
+.\.venv\Scripts\python.exe manage.py migrate --noinput
+.\.venv\Scripts\python.exe manage.py showmigrations accounts
+```
+
+确认 `accounts` 下没有未应用迁移后，重新发起登录。同一个微信授权 `code` 只能使用一次，重试时必须使用微信 SDK 返回的新 `code`。
 
 ### `celery.exe` 被应用程序控制策略阻止
 

@@ -10,20 +10,26 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from backend.accounts.api.serializers import (
+    AppleLoginRequestSerializer,
     DevPasswordLoginRequestSerializer,
     InitialRoleRequestSerializer,
     InitialRoleResponseSerializer,
     LoginRequestSerializer,
     LogoutResponseSerializer,
+    PhoneBindingRequestSerializer,
+    PhoneBindingResponseSerializer,
     RefreshRequestSerializer,
     SessionResponseSerializer,
     SmsCodeRequestSerializer,
     SmsCodeResponseSerializer,
     TokenPairResponseSerializer,
+    WeChatLoginRequestSerializer,
 )
 from backend.accounts.authentication import BearerTokenAuthentication
 from backend.accounts.services import (
+    bind_phone_to_account,
     login_with_code,
+    login_with_oauth,
     login_with_password,
     logout_session,
     refresh_access_token,
@@ -31,6 +37,11 @@ from backend.accounts.services import (
     send_sms_code,
     session_payload,
 )
+from backend.common.errors import ErrorCode
+from backend.common.exceptions import ApiError
+from backend.integrations.oauth.apple import AppleLoginProvider
+from backend.integrations.oauth.contracts import OAuthProviderError, OAuthProviderUnavailable
+from backend.integrations.oauth.wechat import WeChatLoginProvider
 from backend.providers.services import current_application_payload
 
 
@@ -92,8 +103,132 @@ class LoginView(APIView):
             phone_value=serializer.validated_data["phone"],
             code_value=serializer.validated_data["code"],
             idempotency_key=request.headers.get("Idempotency-Key"),
+            referral_context=dict(serializer.validated_data.get("referral_context") or {}),
+            request=request._request,
         )
         return Response(_token_payload(result))
+
+
+class AppleLoginView(APIView):
+    """iOS App 使用 Sign in with Apple 登录或自动注册。"""
+
+    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = []
+    permission_classes: ClassVar[list[type[BasePermission]]] = [AllowAny]
+
+    @extend_schema(
+        auth=[],
+        summary="Apple 登录",
+        description="仅支持 iOS App。后端验证 Apple identity_token、Bundle ID 和 nonce，不信任客户端身份。",
+        request=AppleLoginRequestSerializer,
+        responses={200: TokenPairResponseSerializer},
+        parameters=[_idempotency_header()],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = AppleLoginRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            identity = AppleLoginProvider().verify(
+                identity_token=serializer.validated_data["identity_token"],
+                nonce=serializer.validated_data["nonce"],
+            )
+        except OAuthProviderError as exc:
+            raise ApiError(
+                ErrorCode.AUTH_OAUTH_INVALID,
+                str(exc),
+                status_code=401,
+            ) from exc
+        except OAuthProviderUnavailable as exc:
+            raise ApiError(
+                ErrorCode.AUTH_OAUTH_UNAVAILABLE,
+                str(exc),
+                status_code=503,
+            ) from exc
+        return Response(
+            _token_payload(
+                login_with_oauth(
+                    identity=identity,
+                    idempotency_key=request.headers.get("Idempotency-Key"),
+                    referral_context=dict(serializer.validated_data.get("referral_context") or {}),
+                )
+            )
+        )
+
+
+class WeChatLoginView(APIView):
+    """微信开放平台 App 登录或自动注册。"""
+
+    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = []
+    permission_classes: ClassVar[list[type[BasePermission]]] = [AllowAny]
+
+    @extend_schema(
+        auth=[],
+        summary="微信 App 登录",
+        description="后端使用微信临时 code 换取 openid/unionid，客户端不能直接指定账号身份。",
+        request=WeChatLoginRequestSerializer,
+        responses={200: TokenPairResponseSerializer},
+        parameters=[_idempotency_header()],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = WeChatLoginRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            identity = WeChatLoginProvider().verify(
+                code=serializer.validated_data["code"],
+                state=serializer.validated_data["state"],
+            )
+        except OAuthProviderError as exc:
+            raise ApiError(
+                ErrorCode.AUTH_OAUTH_INVALID,
+                str(exc),
+                status_code=401,
+            ) from exc
+        except OAuthProviderUnavailable as exc:
+            raise ApiError(
+                ErrorCode.AUTH_OAUTH_UNAVAILABLE,
+                str(exc),
+                status_code=503,
+            ) from exc
+        return Response(
+            _token_payload(
+                login_with_oauth(
+                    identity=identity,
+                    idempotency_key=request.headers.get("Idempotency-Key"),
+                    referral_context=dict(serializer.validated_data.get("referral_context") or {}),
+                )
+            )
+        )
+
+
+class PhoneBindingView(APIView):
+    """当前第三方账号手动绑定手机号，必要时空账号安全合并到手机号账号。"""
+
+    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = [BearerTokenAuthentication]
+    permission_classes: ClassVar[list[type[BasePermission]]] = [IsAuthenticated]
+
+    @extend_schema(
+        summary="绑定手机号",
+        description=(
+            "需要先调用验证码接口。若手机号已注册且账号未绑定第三方账号，"
+            "空的第三方账号会合并到手机号账号并返回新会话令牌。"
+        ),
+        request=PhoneBindingRequestSerializer,
+        responses={200: PhoneBindingResponseSerializer},
+        parameters=[_idempotency_header()],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PhoneBindingRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = bind_phone_to_account(
+            user=request.user,
+            phone_value=serializer.validated_data["phone"],
+            code_value=serializer.validated_data["code"],
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            referral_context=dict(serializer.validated_data.get("referral_context") or {}),
+            request=request._request,
+        )
+        payload = _token_payload(result.login)
+        payload.update({"already_bound": result.already_bound, "merged": result.merged})
+        return Response(payload)
 
 
 class DevPasswordLoginView(APIView):
@@ -201,4 +336,5 @@ def _token_payload(result) -> dict[str, object]:
         "user_public_id": result.user_public_id,
         "is_new_user": result.is_new_user,
         "requires_identity_selection": result.requires_identity_selection,
+        "requires_phone_binding": result.requires_phone_binding,
     }

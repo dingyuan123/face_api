@@ -19,8 +19,17 @@ CACHES = {
 
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 SMS_MOCK_ENABLED = True
 AUTH_TOKEN_SIGNING_KEY = "test-token-signing-key"
 PHONE_HASH_KEY = "test-phone-hash-key"
 SMS_MOCK_SIGNING_KEY = "test-sms-mock-signing-key"
+LOCATION_ENCRYPTION_KEY = "test-location-encryption-key-change-me"
+LOCATION_SELECTION_SIGNING_KEY = "test-location-selection-key-change-me"
+TENCENT_MAP_KEY = ""
+LOCATION_SEARCH_CACHE_TTL_SECONDS = 0

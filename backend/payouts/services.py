@@ -421,15 +421,18 @@ def create_provider_order_earning(order: Any) -> EarningEntry | None:
     """订单确认完成后幂等生成服务者收入记录并按配置结算。"""
 
     gross_amount_minor = max(0, order.paid_amount_minor - order.refunded_amount_minor)
-    platform_fee_amount_minor = min(order.platform_fee_amount_minor, gross_amount_minor)
-    net_amount_minor = gross_amount_minor - platform_fee_amount_minor
+    platform_commission_amount_minor = min(
+        getattr(order, "platform_commission_amount_minor", 0),
+        gross_amount_minor,
+    )
+    net_amount_minor = gross_amount_minor - platform_commission_amount_minor
     if net_amount_minor <= 0:
         return None
     fingerprint = sensitive_fingerprint(
         {
             "order_no": str(order.order_no),
             "gross_amount_minor": gross_amount_minor,
-            "platform_fee_amount_minor": platform_fee_amount_minor,
+            "platform_fee_amount_minor": platform_commission_amount_minor,
             "net_amount_minor": net_amount_minor,
         }
     )
@@ -451,7 +454,7 @@ def create_provider_order_earning(order: Any) -> EarningEntry | None:
                     "user": order.provider_user,
                     "currency": order.currency,
                     "gross_amount_minor": gross_amount_minor,
-                    "platform_fee_amount_minor": platform_fee_amount_minor,
+                    "platform_fee_amount_minor": platform_commission_amount_minor,
                     "net_amount_minor": net_amount_minor,
                     "available_at": available_at,
                     "rule_snapshot": {
@@ -460,6 +463,11 @@ def create_provider_order_earning(order: Any) -> EarningEntry | None:
                         "order_paid_amount_minor": order.paid_amount_minor,
                         "order_refunded_amount_minor": order.refunded_amount_minor,
                         "order_platform_fee_amount_minor": order.platform_fee_amount_minor,
+                        "order_platform_commission_amount_minor": getattr(
+                            order,
+                            "platform_commission_amount_minor",
+                            0,
+                        ),
                         "settlement_delay_days": settings.PROVIDER_INCOME_SETTLEMENT_DELAY_DAYS,
                     },
                     "idempotency_key": f"order-income:{order.order_no}",
@@ -474,6 +482,112 @@ def create_provider_order_earning(order: Any) -> EarningEntry | None:
             business_type="PROVIDER_ORDER_INCOME",
             business_no=str(order.order_no),
         ).first()
+
+
+def create_referral_reward_earning(
+    *,
+    user: User,
+    reward_no: str,
+    currency: str,
+    gross_amount_minor: int,
+    net_amount_minor: int,
+    available_at: timezone.datetime,
+    rule_snapshot: dict[str, Any],
+    idempotency_key: str,
+    request_fingerprint: str,
+) -> EarningEntry:
+    """幂等创建普通用户推广收益记录，并在到期时进入推广收益账户。"""
+
+    if net_amount_minor <= 0:
+        raise ApiError(
+            ErrorCode.EARNING_TRANSACTION_CONFLICT,
+            "推广奖励金额必须大于零",
+            status_code=400,
+        )
+    account = get_or_create_earning_account(
+        user=user,
+        account_type=EarningAccount.AccountType.REFERRAL_REWARD,
+        currency=currency,
+    )
+    try:
+        with transaction.atomic():
+            entry, _ = EarningEntry.objects.get_or_create(
+                account=account,
+                business_type="REFERRAL_REWARD",
+                business_no=reward_no,
+                defaults={
+                    "user": user,
+                    "currency": currency,
+                    "gross_amount_minor": gross_amount_minor,
+                    "platform_fee_amount_minor": 0,
+                    "net_amount_minor": net_amount_minor,
+                    "available_at": available_at,
+                    "rule_snapshot": rule_snapshot,
+                    "idempotency_key": idempotency_key,
+                    "request_fingerprint": request_fingerprint,
+                },
+            )
+            settle_due_earnings(account=account)
+            entry.refresh_from_db()
+            return entry
+    except IntegrityError:
+        entry = EarningEntry.objects.filter(
+            account=account,
+            business_type="REFERRAL_REWARD",
+            business_no=reward_no,
+        ).first()
+        if entry is None:
+            raise
+        return entry
+
+
+def adjust_earning_account(
+    *,
+    user: User,
+    account_type: str,
+    currency: str,
+    business_type: str,
+    business_no: str,
+    amount_minor: int,
+    direction: str,
+    idempotency_key: str,
+    request_fingerprint: str,
+    reason: str,
+) -> EarningTransaction:
+    """对已结算收益执行可追溯的人工、退款或追回调整。"""
+
+    if account_type not in EarningAccount.AccountType.values:
+        raise _invalid(ErrorCode.EARNING_TRANSACTION_CONFLICT, "account_type", "收益账户类型不存在")
+    if direction not in {
+        EarningTransaction.Direction.CREDIT,
+        EarningTransaction.Direction.DEBIT,
+    }:
+        raise _invalid(ErrorCode.EARNING_TRANSACTION_CONFLICT, "direction", "调整方向不正确")
+    if amount_minor <= 0:
+        raise _invalid(ErrorCode.EARNING_TRANSACTION_CONFLICT, "amount_minor", "调整金额必须大于零")
+    account = get_or_create_earning_account(user=user, account_type=account_type, currency=currency)
+    with transaction.atomic():
+        account = EarningAccount.objects.select_for_update().get(pk=account.pk)
+        if (
+            direction == EarningTransaction.Direction.DEBIT
+            and account.available_amount_minor < amount_minor
+        ):
+            raise ApiError(
+                ErrorCode.EARNING_TRANSACTION_CONFLICT,
+                "推广收益可用余额不足，无法自动冲减",
+                status_code=409,
+            )
+        record, _ = _create_earning_transaction(
+            account=account,
+            direction=direction,
+            transaction_type=EarningTransaction.TransactionType.ADJUSTMENT,
+            business_type=business_type,
+            business_no=business_no,
+            amount_minor=amount_minor,
+            idempotency_key=idempotency_key,
+            request_fingerprint=request_fingerprint,
+        )
+        return record
 
 
 def settle_due_earnings(*, account: EarningAccount) -> int:
@@ -543,6 +657,14 @@ def _create_earning_transaction(
         total_income_after = account.total_income_amount_minor + (
             amount_minor if update_totals else 0
         )
+        total_withdrawn_after = account.total_withdrawn_amount_minor
+    elif (
+        direction == EarningTransaction.Direction.DEBIT
+        and transaction_type == EarningTransaction.TransactionType.ADJUSTMENT
+    ):
+        available_after = account.available_amount_minor - amount_minor
+        frozen_after = account.frozen_amount_minor
+        total_income_after = account.total_income_amount_minor
         total_withdrawn_after = account.total_withdrawn_amount_minor
     elif direction == EarningTransaction.Direction.DEBIT:
         available_after = account.available_amount_minor

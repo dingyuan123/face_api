@@ -38,6 +38,7 @@ SENSITIVE_PATTERNS = (
     re.compile(r"(?i)(bearer\s+)[a-z0-9._~+/=-]+"),
     re.compile(r"(?i)\b(password|token|secret|api_key)(\s*[=:]\s*)[^,\s;}]+"),
     re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)"),
+    re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)"),
 )
 
 

@@ -17,6 +17,183 @@ paths:
                 type: object
                 additionalProperties: {}
           description: ''
+  /api/v1/admin/identity/verifications/:
+    get:
+      operationId: v1_admin_identity_verifications_list
+      description: 管理员分页查看实名认证记录。
+      summary: 查看实名认证列表
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 认证状态筛选
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IdentityVerificationResponse'
+          description: ''
+  /api/v1/admin/identity/verifications/{verification_no}/actions/{action}/:
+    post:
+      operationId: v1_admin_identity_verifications_actions_create
+      description: 管理员通过或拒绝实名认证。
+      summary: 人工审核实名认证
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: verification_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IdentityReviewRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IdentityReviewRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IdentityReviewRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityVerificationResponse'
+          description: ''
+  /api/v1/admin/location-search/quick-keywords/:
+    get:
+      operationId: listAdminLocationQuickKeywords
+      description: 管理员查看和创建地点快捷关键词配置接口。
+      summary: 管理地点快捷关键词
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationQuickKeywordAdminListResponse'
+          description: ''
+    post:
+      operationId: createAdminLocationQuickKeyword
+      description: 管理员查看和创建地点快捷关键词配置接口。
+      summary: 创建地点快捷关键词
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationQuickKeywordCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LocationQuickKeywordCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LocationQuickKeywordCreateRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationQuickKeywordAdminResponse'
+          description: ''
+  /api/v1/admin/location-search/quick-keywords/{keyword_id}/:
+    patch:
+      operationId: updateAdminLocationQuickKeyword
+      description: 管理员更新和停用地点快捷关键词配置接口。
+      summary: 更新地点快捷关键词
+      parameters:
+      - in: path
+        name: keyword_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedLocationQuickKeywordUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedLocationQuickKeywordUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedLocationQuickKeywordUpdateRequest'
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationQuickKeywordAdminResponse'
+          description: ''
+    delete:
+      operationId: deactivateAdminLocationQuickKeyword
+      description: 管理员更新和停用地点快捷关键词配置接口。
+      summary: 停用地点快捷关键词
+      parameters:
+      - in: query
+        name: expected_version
+        schema:
+          type: integer
+        description: 当前配置版本号
+        required: true
+      - in: path
+        name: keyword_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationQuickKeywordAdminResponse'
+          description: ''
   /api/v1/admin/moments/:
     get:
       operationId: listAdminMoments
@@ -748,6 +925,215 @@ paths:
               schema:
                 $ref: '#/components/schemas/ServiceResponse'
           description: ''
+  /api/v1/admin/referral-policies/:
+    get:
+      operationId: v1_admin_referral_policies_list
+      description: 管理员查询和创建奖励政策版本。
+      summary: 查看奖励政策版本
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReferralPolicyResponse'
+          description: ''
+    post:
+      operationId: v1_admin_referral_policies_create
+      description: 管理员查询和创建奖励政策版本。
+      summary: 创建奖励政策版本
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralPolicyRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReferralPolicyRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReferralPolicyRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralPolicyResponse'
+          description: ''
+  /api/v1/admin/referral-policies/{policy_no}/retire/:
+    post:
+      operationId: v1_admin_referral_policies_retire_create
+      description: 管理员停止奖励政策版本。
+      summary: 停止奖励政策版本
+      parameters:
+      - in: path
+        name: policy_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralPolicyRetireResponse'
+          description: ''
+  /api/v1/admin/referrals/attributions/:
+    get:
+      operationId: v1_admin_referrals_attributions_retrieve
+      description: 管理员查询邀请关系和风险状态。
+      summary: 查看邀请归因
+      parameters:
+      - in: query
+        name: inviter_public_id
+        schema:
+          type: string
+        description: 邀请人用户 UUID
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: risk_status
+        schema:
+          type: string
+        description: 风险状态
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/admin/referrals/rewards/:
+    get:
+      operationId: v1_admin_referrals_rewards_retrieve
+      description: 管理员查询推广奖励。
+      summary: 查看推广奖励
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 奖励状态
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardListResponse'
+          description: ''
+  /api/v1/admin/referrals/rewards/{reward_no}/actions/{action}/:
+    post:
+      operationId: v1_admin_referrals_rewards_actions_create
+      description: 管理员冻结、解冻或取消推广奖励。
+      summary: 调整推广奖励状态
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: reward_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardStateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RewardStateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RewardStateRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardResponse'
+          description: ''
+  /api/v1/admin/referrals/rewards/{reward_no}/adjust/:
+    post:
+      operationId: v1_admin_referrals_rewards_adjust_create
+      description: 管理员对推广奖励执行不可变金额调整。
+      summary: 调整推广奖励金额
+      parameters:
+      - in: path
+        name: reward_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardAdjustRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RewardAdjustRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RewardAdjustRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardResponse'
+          description: ''
   /api/v1/admin/refund-requests/:
     get:
       operationId: listAdminOrderRefundRequests
@@ -1142,6 +1528,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/WithdrawalResponse'
           description: ''
+  /api/v1/auth/apple/login/:
+    post:
+      operationId: v1_auth_apple_login_create
+      description: 仅支持 iOS App。后端验证 Apple identity_token、Bundle ID 和 nonce，不信任客户端身份。
+      summary: Apple 登录
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 同一请求重复提交时使用的幂等键; 发送验证码和登录接口支持。
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppleLoginRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AppleLoginRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AppleLoginRequestRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPairResponse'
+          description: ''
   /api/v1/auth/login/:
     post:
       operationId: v1_auth_login_create
@@ -1247,6 +1665,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/SmsCodeResponse'
           description: ''
+  /api/v1/auth/wechat/login/:
+    post:
+      operationId: v1_auth_wechat_login_create
+      description: 后端使用微信临时 code 换取 openid/unionid，客户端不能直接指定账号身份。
+      summary: 微信 App 登录
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 同一请求重复提交时使用的幂等键; 发送验证码和登录接口支持。
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WeChatLoginRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WeChatLoginRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/WeChatLoginRequestRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPairResponse'
+          description: ''
   /api/v1/comments/{comment_id}/:
     delete:
       operationId: v1_comments_destroy
@@ -1270,6 +1720,162 @@ paths:
               schema:
                 type: object
                 additionalProperties: {}
+          description: ''
+  /api/v1/conversations/:
+    get:
+      operationId: v1_conversations_retrieve
+      description: 查看当前用户参与的共享会话。
+      summary: 我的聊天会话
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: 上一页返回的会话游标
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: 每页数量，默认 20，最大 100
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationListResponse'
+          description: ''
+  /api/v1/conversations/{conversation_id}/:
+    delete:
+      operationId: v1_conversations_destroy
+      description: 只对当前用户隐藏，不影响对方；新订单或重新打开入口可恢复。
+      summary: 删除我的会话
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationHideResponse'
+          description: ''
+  /api/v1/conversations/{conversation_id}/messages/:
+    get:
+      operationId: v1_conversations_messages_retrieve
+      description: before_sequence 向前翻历史；after_sequence 用于断线后按序补偿。
+      summary: 读取聊天历史
+      parameters:
+      - in: query
+        name: after_sequence
+        schema:
+          type: integer
+        description: 读取该序号之后的消息
+      - in: query
+        name: before_sequence
+        schema:
+          type: integer
+        description: 读取该序号之前的消息
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: 每页数量，默认 20，最大 100
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageListResponse'
+          description: ''
+    post:
+      operationId: v1_conversations_messages_create
+      description: 使用 client_message_id 保证重复请求幂等；消息成功后异步广播。
+      summary: 发送聊天消息
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MessageCreateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageCreateRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageCreateResponse'
+          description: ''
+  /api/v1/conversations/{conversation_id}/read/:
+    post:
+      operationId: v1_conversations_read_create
+      description: 标记共享会话消息已读。
+      summary: 标记会话已读
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConversationReadRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ConversationReadRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ConversationReadRequestRequest'
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationReadResponse'
           description: ''
   /api/v1/dev/auth/password-login/:
     post:
@@ -1511,6 +2117,162 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedHomeFeedItemList'
           description: ''
+    post:
+      operationId: listHomeFeedWithLocation
+      description: 浏览者坐标只用于本次请求计算距离，不写入普通用户位置表；服务者位置使用其登录时更新的加密位置状态。
+      summary: 按浏览者当前位置获取首页服务者卡片
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: 分页游标值
+        schema:
+          type: string
+      - name: limit
+        required: false
+        in: query
+        description: 每页返回的结果数量。
+        schema:
+          type: integer
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HomeFeedLocationRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/HomeFeedLocationRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/HomeFeedLocationRequestRequest'
+      security:
+      - BearerTokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedHomeFeedItemList'
+          description: ''
+  /api/v1/identity/real-name/me/:
+    get:
+      operationId: v1_identity_real_name_me_retrieve
+      description: 查询当前用户实名认证状态。
+      summary: 查询我的实名认证
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityVerificationResponse'
+          description: ''
+  /api/v1/identity/real-name/submit/:
+    post:
+      operationId: v1_identity_real_name_submit_create
+      description: 不执行人脸认证；姓名、身份证号和照片进入人工审核。
+      summary: 提交实名认证资料
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RealNameVerificationRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RealNameVerificationRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RealNameVerificationRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentityVerificationResponse'
+          description: ''
+  /api/v1/location-search/:
+    get:
+      operationId: searchNearbyLocations
+      description: 登录用户搜索周边符合公共场所规则的地点接口。
+      summary: 搜索周边公共场所
+      parameters:
+      - in: query
+        name: coordinate_system
+        schema:
+          type: string
+        description: 前端坐标系，支持 GCJ02 或 WGS84
+      - in: query
+        name: keyword
+        schema:
+          type: string
+        description: 自由搜索关键词，与快捷关键词二选一
+      - in: query
+        name: latitude
+        schema:
+          type: number
+          format: double
+        description: 前端地图中心纬度
+        required: true
+      - in: query
+        name: limit
+        schema:
+          type: integer
+        description: 返回数量，最多 20
+      - in: query
+        name: longitude
+        schema:
+          type: number
+          format: double
+        description: 前端地图中心经度
+        required: true
+      - in: query
+        name: quick_keyword_code
+        schema:
+          type: string
+        description: 后台维护的快捷关键词代码，与 keyword 二选一
+      - in: query
+        name: radius_m
+        schema:
+          type: integer
+        description: 搜索半径，单位为米
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationSearchResponse'
+          description: ''
+  /api/v1/location-search/quick-keywords/:
+    get:
+      operationId: listLocationQuickKeywords
+      description: 登录用户获取地点快捷搜索关键词接口。
+      summary: 获取地点快捷搜索关键词
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LocationQuickKeywordListResponse'
+          description: ''
   /api/v1/me/favorites/:
     get:
       operationId: v1_me_favorites_list
@@ -1678,6 +2440,61 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MediaAssetResponse'
+          description: ''
+  /api/v1/messaging/conversations/providers/{provider_public_id}/:
+    get:
+      operationId: v1_messaging_conversations_providers_retrieve
+      description: 双方只要存在支付后订单关系即可打开；已隐藏会话会为当前用户恢复显示。
+      summary: 获取服务者会话
+      parameters:
+      - in: path
+        name: provider_public_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+          description: ''
+  /api/v1/messaging/unread-summary/:
+    get:
+      operationId: v1_messaging_unread_summary_retrieve
+      description: 查看当前用户聊天未读汇总。
+      summary: 聊天未读汇总
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadSummaryResponse'
+          description: ''
+  /api/v1/messaging/ws-ticket/:
+    post:
+      operationId: v1_messaging_ws_ticket_create
+      description: 凭证只使用一次且很快过期；连接地址为 /ws/messages/?ticket=...。
+      summary: 获取实时聊天连接凭证
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebSocketTicketResponse'
           description: ''
   /api/v1/moment-options/categories/:
     get:
@@ -2173,11 +2990,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/OrderResponse'
           description: ''
+  /api/v1/orders/{order_no}/conversation/:
+    get:
+      operationId: v1_orders_conversation_retrieve
+      description: 只有预约用户或服务者可以访问；未支付订单不开放会话。
+      summary: 获取订单会话
+      parameters:
+      - in: path
+        name: order_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationResponse'
+          description: ''
   /api/v1/orders/{order_no}/pay/:
     post:
       operationId: v1_orders_pay_create
-      description: 钱包余额支付预约订单。
-      summary: 使用钱包余额支付订单
+      description: BALANCE 同步支付成功；WECHAT_APP 和 ALIPAY_APP 返回原生 SDK 参数，订单只有在验签回调成功后才推进到待接单。
+      summary: 发起订单支付
       parameters:
       - in: path
         name: order_no
@@ -2206,8 +3046,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: {}
+                $ref: '#/components/schemas/OrderPayResponse'
           description: ''
   /api/v1/orders/{order_no}/refund-requests/:
     get:
@@ -2415,6 +3254,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OrderSummaryResponse'
+          description: ''
+  /api/v1/payments/{payment_no}/:
+    get:
+      operationId: v1_payments_retrieve
+      description: 当前用户查询订单支付状态和客户端支付参数。
+      summary: 查询支付单
+      parameters:
+      - in: path
+        name: payment_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentDetail'
           description: ''
   /api/v1/payout-methods/:
     get:
@@ -2654,6 +3516,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProviderApplicationResponse'
+          description: ''
+  /api/v1/provider-dashboard/:
+    get:
+      operationId: v1_provider_dashboard_retrieve
+      description: 服务者工作台今日概览和数据看板。
+      summary: 获取服务者数据看板
+      parameters:
+      - in: query
+        name: range
+        schema:
+          type: string
+        description: 统计周期：7d 或 30d，默认 7d
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderDashboardResponse'
           description: ''
   /api/v1/provider-moments/:
     get:
@@ -3609,6 +4493,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ServiceResponse'
           description: ''
+  /api/v1/provider/location/:
+    get:
+      operationId: getProviderLocationStatus
+      description: 服务者登录后更新、查询和撤销当前模糊位置。
+      summary: 查询服务者位置状态
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderLocationStatusResponse'
+          description: ''
+    put:
+      operationId: updateProviderLocation
+      description: 服务者登录后更新、查询和撤销当前模糊位置。
+      summary: 更新服务者当前位置
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProviderLocationUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProviderLocationUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProviderLocationUpdateRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderLocationStatusResponse'
+          description: ''
+    delete:
+      operationId: revokeProviderLocation
+      description: 服务者登录后更新、查询和撤销当前模糊位置。
+      summary: 撤销服务者位置共享
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderLocationStatusResponse'
+          description: ''
   /api/v1/providers/{provider_public_id}/:
     get:
       operationId: v1_providers_retrieve
@@ -3706,6 +4648,146 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ReviewResponse'
+          description: ''
+  /api/v1/referrals/me/:
+    get:
+      operationId: v1_referrals_me_retrieve
+      description: 查询当前用户分享赚钱页总览。
+      summary: 获取我的分享赚钱总览
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralOverviewResponse'
+          description: ''
+  /api/v1/referrals/me/rewards/:
+    get:
+      operationId: v1_referrals_me_rewards_retrieve
+      description: 分页查询当前用户推广奖励。
+      summary: 获取我的推广奖励明细
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 页码
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 每页数量
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 奖励状态筛选
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardListResponse'
+          description: ''
+  /api/v1/referrals/me/rewards/summary/:
+    get:
+      operationId: v1_referrals_me_rewards_summary_retrieve
+      description: 查询当前用户奖励状态汇总。
+      summary: 获取我的奖励汇总
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/referrals/me/share-links/:
+    post:
+      operationId: v1_referrals_me_share_links_create
+      description: 按渠道生成当前用户的分享链接。
+      summary: 生成分享链接
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShareLinkRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ShareLinkRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ShareLinkRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareLinkResponse'
+          description: ''
+  /api/v1/referrals/qr/{share_no}/:
+    get:
+      operationId: v1_referrals_qr_retrieve
+      description: 使用海报响应中的 qr_image_url，不需要 Authorization。
+      summary: 读取分享主页二维码
+      parameters:
+      - in: path
+        name: share_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/referrals/visits/:
+    post:
+      operationId: v1_referrals_visits_create
+      description: 记录匿名分享链接访问，不执行注册绑定。
+      summary: 记录分享链接访问
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferralContextRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReferralContextRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReferralContextRequestRequest'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReferralVisitResponse'
           description: ''
   /api/v1/refund-requests/{request_no}/cancel/:
     post:
@@ -4041,6 +5123,40 @@ paths:
               schema:
                 $ref: '#/components/schemas/InitialRoleResponse'
           description: ''
+  /api/v1/users/me/phone-binding/:
+    post:
+      operationId: v1_users_me_phone_binding_create
+      description: 需要先调用验证码接口。若手机号已注册且账号未绑定第三方账号，空的第三方账号会合并到手机号账号并返回新会话令牌。
+      summary: 绑定手机号
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: 同一请求重复提交时使用的幂等键; 发送验证码和登录接口支持。
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhoneBindingRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PhoneBindingRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PhoneBindingRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhoneBindingResponse'
+          description: ''
   /api/v1/users/me/profile/:
     get:
       operationId: v1_users_me_profile_retrieve
@@ -4082,6 +5198,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProfileUpdateResponse'
+          description: ''
+  /api/v1/users/me/share-poster/:
+    get:
+      operationId: v1_users_me_share_poster_retrieve
+      description: 返回海报文案、个人安全资料、主视觉媒体和公开分享链接；不返回令牌或敏感身份信息。
+      summary: 获取个人分享海报数据
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileSharePosterResponse'
           description: ''
   /api/v1/users/me/summary/:
     get:
@@ -4685,6 +5817,86 @@ components:
       - trending_id
       - updated_at
       - version
+    AppleLoginRequestRequest:
+      type: object
+      description: iOS App Sign in with Apple 登录请求。
+      properties:
+        identity_token:
+          type: string
+          minLength: 1
+          description: Apple SDK 返回的 identity_token
+        nonce:
+          type: string
+          minLength: 1
+          description: iOS 登录前生成并传给 Apple 的一次性 nonce
+        authorization_code:
+          type: string
+          description: Apple SDK 返回的 authorization_code，可选，仅用于审计
+        referral_context:
+          allOf:
+          - $ref: '#/components/schemas/ReferralContextRequest'
+          description: 分享入口归因信息；第三方账号绑定手机号时完成归因
+      required:
+      - identity_token
+      - nonce
+    ChannelEnum:
+      enum:
+      - WECHAT
+      - MOMENTS
+      - POSTER
+      - SYSTEM
+      - OTHER
+      type: string
+      description: |-
+        * `WECHAT` - WECHAT
+        * `MOMENTS` - MOMENTS
+        * `POSTER` - POSTER
+        * `SYSTEM` - SYSTEM
+        * `OTHER` - OTHER
+    ChatOrderSummary:
+      type: object
+      description: 聊天会话关联订单的安全摘要。
+      properties:
+        order_no:
+          type: string
+          format: uuid
+          description: 关联订单 UUID
+        status:
+          type: string
+          description: 订单当前状态
+        service_title:
+          type: string
+          description: 订单服务名称
+        cover_media:
+          allOf:
+          - $ref: '#/components/schemas/MediaAssetSummary'
+          nullable: true
+          description: 服务封面；包含可直接展示的临时图片地址
+      required:
+      - cover_media
+      - order_no
+      - service_title
+      - status
+    ChatUserSummary:
+      type: object
+      description: 聊天参与人的公开资料摘要。
+      properties:
+        user_public_id:
+          type: string
+          format: uuid
+          description: 参与用户公开 UUID
+        nickname:
+          type: string
+          description: 参与用户昵称或脱敏手机号
+        avatar_media:
+          allOf:
+          - $ref: '#/components/schemas/MediaAssetSummary'
+          nullable: true
+          description: 参与用户头像；包含可直接展示的临时图片地址
+      required:
+      - avatar_media
+      - nickname
+      - user_public_id
     CityOptionResponse:
       type: object
       description: 城市选项配置。
@@ -4767,6 +5979,153 @@ components:
       - avatar_media
       - nickname
       - public_id
+    ConversationHideResponse:
+      type: object
+      description: 当前用户隐藏或恢复前的删除会话操作结果。
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: 被隐藏的共享会话 UUID
+        hidden_at:
+          type: string
+          description: 当前用户隐藏时间，格式 YYYY-MM-DD HH:mm:ss
+      required:
+      - conversation_id
+      - hidden_at
+    ConversationListResponse:
+      type: object
+      description: 订单会话游标分页响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationResponse'
+          description: 当前用户的订单会话
+        next_cursor:
+          type: string
+          nullable: true
+          description: 下一页游标；首页为空
+        has_more:
+          type: boolean
+          description: 是否还有更多会话
+        limit:
+          type: integer
+          description: 本页最大数量
+      required:
+      - has_more
+      - items
+      - limit
+      - next_cursor
+    ConversationReadRequestRequest:
+      type: object
+      description: 标记订单会话已读。
+      properties:
+        sequence:
+          type: integer
+          minimum: 0
+          description: 已读到的最大消息序号；省略时标记当前全部消息已读
+    ConversationReadResponse:
+      type: object
+      description: 已读位置更新结果。
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: 订单会话 UUID
+        last_read_sequence:
+          type: integer
+          description: 更新后的已读消息序号
+        unread_count:
+          type: integer
+          description: 更新后的未读消息数
+      required:
+      - conversation_id
+      - last_read_sequence
+      - unread_count
+    ConversationResponse:
+      type: object
+      description: 用户与服务者共享会话详情和当前用户会话状态。
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: 订单会话 UUID
+        order:
+          allOf:
+          - $ref: '#/components/schemas/ChatOrderSummary'
+          description: 最新关联订单安全摘要，决定当前聊天窗口
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatOrderSummary'
+          description: 双方历史订单安全摘要；同一用户与服务者复用同一会话
+        order_count:
+          type: integer
+          description: 双方已关联的聊天资格订单数
+        participants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatUserSummary'
+          description: 用户与服务者公开资料
+        status:
+          type: string
+          description: 会话状态：OPEN、READ_ONLY 或 CLOSED
+        can_send:
+          type: boolean
+          description: 当前用户是否仍可发送消息
+        close_reason:
+          type: string
+          description: 只读或关闭原因；正常发送时为空
+        latest_sequence:
+          type: integer
+          description: 当前最新消息序号
+        last_read_sequence:
+          type: integer
+          description: 当前用户已读到的消息序号
+        unread_count:
+          type: integer
+          description: 当前用户未读消息数
+        last_message:
+          allOf:
+          - $ref: '#/components/schemas/MessageResponse'
+          nullable: true
+          description: 最近一条消息
+        version:
+          type: integer
+          description: 会话版本号
+        created_at:
+          type: string
+          format: date-time
+          description: 会话创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 会话最近更新时间
+      required:
+      - can_send
+      - close_reason
+      - conversation_id
+      - created_at
+      - last_message
+      - last_read_sequence
+      - latest_sequence
+      - order
+      - order_count
+      - orders
+      - participants
+      - status
+      - unread_count
+      - updated_at
+      - version
+    CoordinateSystemEnum:
+      enum:
+      - GCJ02
+      - WGS84
+      type: string
+      description: |-
+        * `GCJ02` - GCJ02
+        * `WGS84` - WGS84
     DevPasswordLoginRequestRequest:
       type: object
       description: 开发测试账号密码登录请求；生产环境接口不可用。
@@ -5107,7 +6466,11 @@ components:
           type: number
           format: double
           nullable: true
-          description: 距离，单位千米；位置数据未接入时为空
+          description: 相对浏览者当前位置的直线距离，保留一位小数；未提供位置时为空
+        distance_text:
+          type: string
+          nullable: true
+          description: 前端可直接展示的模糊距离文案；未提供位置时为空
         rating:
           type: number
           format: double
@@ -5116,6 +6479,7 @@ components:
       required:
       - category_codes
       - distance_km
+      - distance_text
       - online_status
       - provider
       - provider_public_id
@@ -5124,6 +6488,47 @@ components:
       - recent_photo_media
       - services
       - verification
+    HomeFeedLocationRequestRequest:
+      type: object
+      description: 首页服务者卡片浏览请求；浏览者坐标只用于本次响应距离计算。
+      properties:
+        city_code:
+          type: string
+          minLength: 1
+          description: 城市稳定代码
+        category_code:
+          type: string
+          minLength: 1
+          description: 服务类目代码
+        sort:
+          type: string
+          minLength: 1
+          description: 排序方式
+        cursor:
+          type: string
+          minLength: 1
+          description: 下一页游标
+        limit:
+          type: integer
+          minimum: 1
+          description: 每页数量
+        latitude:
+          type: number
+          format: double
+          description: 浏览者当前纬度，仅本次使用
+        longitude:
+          type: number
+          format: double
+          description: 浏览者当前经度，仅本次使用
+        coordinate_system:
+          allOf:
+          - $ref: '#/components/schemas/CoordinateSystemEnum'
+          default: GCJ02
+          description: |-
+            浏览者坐标系
+
+            * `GCJ02` - GCJ02
+            * `WGS84` - WGS84
     HomeProvider:
       type: object
       description: 首页卡片中的服务者资料。
@@ -5206,6 +6611,86 @@ components:
       description: |-
         * `AUTO` - AUTO
         * `MANUAL` - MANUAL
+    IdentityReviewRequestRequest:
+      type: object
+      description: 管理员人工审核实名认证请求。
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+          description: 认证记录版本号
+        reason:
+          type: string
+          description: 拒绝原因；审核通过可为空
+          maxLength: 255
+      required:
+      - expected_version
+    IdentityVerificationResponse:
+      type: object
+      description: 实名认证脱敏状态响应。
+      properties:
+        verification_no:
+          type: string
+          format: uuid
+          nullable: true
+          description: 实名认证业务 UUID
+        status:
+          type: string
+          description: 实名认证状态
+        real_name_status:
+          type: string
+          description: 实名认证状态兼容字段
+        id_card_front_media_id:
+          type: string
+          nullable: true
+          description: 身份证正面照片媒体 ID
+        id_card_back_media_id:
+          type: string
+          nullable: true
+          description: 身份证反面照片媒体 ID
+        id_card_front_media:
+          allOf:
+          - $ref: '#/components/schemas/MediaAssetSummary'
+          nullable: true
+          description: 身份证正面照片安全摘要
+        id_card_back_media:
+          allOf:
+          - $ref: '#/components/schemas/MediaAssetSummary'
+          nullable: true
+          description: 身份证反面照片安全摘要
+        reject_reason:
+          type: string
+          description: 人工审核拒绝原因
+        submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 提交时间
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 人工审核时间
+        version:
+          type: integer
+          description: 认证乐观锁版本号
+        user_public_id:
+          type: string
+          format: uuid
+          description: 申请人对外用户标识
+      required:
+      - id_card_back_media
+      - id_card_back_media_id
+      - id_card_front_media
+      - id_card_front_media_id
+      - real_name_status
+      - reject_reason
+      - reviewed_at
+      - status
+      - submitted_at
+      - user_public_id
+      - verification_no
+      - version
     InitialRoleRequestRequest:
       type: object
       description: 首次身份选择请求。
@@ -5227,7 +6712,15 @@ components:
         primary_role:
           type: string
           nullable: true
-          description: 已选择的初始身份
+          description: 当前主身份
+        current_role:
+          type: string
+          description: 客户端当前应使用的身份
+        roles:
+          type: array
+          items:
+            type: string
+          description: 当前可用身份列表，服务者审核通过后包含 USER 和 PROVIDER
         default_workspace:
           type: string
           nullable: true
@@ -5243,11 +6736,13 @@ components:
           type: string
           description: 服务者审核状态
       required:
+      - current_role
       - default_workspace
       - next_route
       - primary_role
       - provider_status
       - requires_identity_selection
+      - roles
     InterestTagResponse:
       type: object
       description: 兴趣标签配置。
@@ -5309,6 +6804,260 @@ components:
       - is_liked
       - like_count
       - moment_id
+    LocationQuickKeywordAdminListResponse:
+      type: object
+      description: 管理员地点快捷关键词列表响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocationQuickKeywordAdminResponse'
+          description: 快捷关键词配置列表
+        total:
+          type: integer
+          description: 快捷关键词配置总数
+      required:
+      - items
+      - total
+    LocationQuickKeywordAdminResponse:
+      type: object
+      description: 管理员地点快捷关键词配置。
+      properties:
+        keyword_id:
+          type: string
+          description: 快捷关键词对外标识
+        code:
+          type: string
+          description: 快捷关键词稳定代码
+        label:
+          type: string
+          description: 前端展示名称
+        query_keyword:
+          type: string
+          description: 提交给地图服务的搜索关键词
+        icon:
+          type: string
+          description: 前端图标标识或静态资源名称
+        sort_order:
+          type: integer
+          description: 展示排序值
+        enabled:
+          type: boolean
+          description: 是否允许前端使用
+        version:
+          type: integer
+          description: 配置乐观锁版本号
+        created_at:
+          type: string
+          format: date-time
+          description: 配置创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 配置最近更新时间
+      required:
+      - code
+      - created_at
+      - enabled
+      - icon
+      - keyword_id
+      - label
+      - query_keyword
+      - sort_order
+      - updated_at
+      - version
+    LocationQuickKeywordCreateRequest:
+      type: object
+      description: 管理员创建地点快捷关键词请求。
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: 快捷关键词稳定代码
+          maxLength: 64
+        label:
+          type: string
+          minLength: 1
+          description: 前端展示名称
+          maxLength: 50
+        query_keyword:
+          type: string
+          minLength: 1
+          description: 提交给地图服务的搜索关键词
+          maxLength: 100
+        icon:
+          type: string
+          description: 前端图标标识或静态资源名称
+          maxLength: 255
+        sort_order:
+          type: integer
+          minimum: 0
+          default: 0
+          description: 展示排序值，数值越小越靠前
+        enabled:
+          type: boolean
+          default: true
+          description: 是否允许前端使用该快捷关键词
+      required:
+      - code
+      - label
+      - query_keyword
+    LocationQuickKeywordListResponse:
+      type: object
+      description: 地点快捷关键词列表响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocationQuickKeywordResponse'
+          description: 启用中的快捷关键词列表
+        total:
+          type: integer
+          description: 返回的快捷关键词数量
+      required:
+      - items
+      - total
+    LocationQuickKeywordResponse:
+      type: object
+      description: 前端地点快捷搜索关键词。
+      properties:
+        keyword_id:
+          type: string
+          description: 快捷关键词对外标识
+        code:
+          type: string
+          description: 快捷关键词稳定代码
+        label:
+          type: string
+          description: 前端展示名称
+        query_keyword:
+          type: string
+          description: 提交给地图服务的搜索关键词
+        icon:
+          type: string
+          description: 前端图标标识或静态资源名称
+        sort_order:
+          type: integer
+          description: 展示排序值
+      required:
+      - code
+      - icon
+      - keyword_id
+      - label
+      - query_keyword
+      - sort_order
+    LocationSearchItem:
+      type: object
+      description: 符合公共场所规则的地点搜索结果。
+      properties:
+        provider_poi_id:
+          type: string
+          description: 腾讯地图 POI 标识
+        name:
+          type: string
+          description: 地点名称
+        address:
+          type: string
+          description: 地点完整地址
+        province:
+          type: string
+          description: 省份名称
+        city:
+          type: string
+          description: 城市名称
+        district:
+          type: string
+          description: 区县名称
+        category_code:
+          type: string
+          description: 地图服务分类代码
+        category_name:
+          type: string
+          description: 地图服务分类名称
+        latitude:
+          type: number
+          format: double
+          description: 地点纬度，坐标系与请求一致
+        longitude:
+          type: number
+          format: double
+          description: 地点经度，坐标系与请求一致
+        phone:
+          type: string
+          description: 地图服务公开联系电话；无号码时为空字符串
+        distance_m:
+          type: integer
+          description: 当前位置到地点的直线距离，单位为米
+        distance_text:
+          type: string
+          description: 前端可直接展示的距离文案
+        selection_token:
+          type: string
+          description: 用于下单确认的短期地点选择凭证
+        selection_expires_at:
+          type: string
+          format: date-time
+          description: 地点选择凭证过期时间
+      required:
+      - address
+      - category_code
+      - category_name
+      - city
+      - distance_m
+      - distance_text
+      - district
+      - latitude
+      - longitude
+      - name
+      - phone
+      - provider_poi_id
+      - province
+      - selection_expires_at
+      - selection_token
+    LocationSearchResponse:
+      type: object
+      description: 地点周边搜索统一响应。
+      properties:
+        query_keyword:
+          type: string
+          description: 本次实际提交给地图服务的搜索词
+        quick_keyword_code:
+          type: string
+          description: 快捷关键词代码；自由搜索时为空
+        center:
+          type: object
+          additionalProperties: {}
+          description: 搜索中心纬度和经度
+        coordinate_system:
+          type: string
+          description: 响应坐标系
+        radius_m:
+          type: integer
+          description: 搜索半径，单位为米
+        provider:
+          type: string
+          description: 地图服务提供商标识
+        provider_total:
+          type: integer
+          description: 地图服务返回的原始结果数量
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LocationSearchItem'
+          description: 通过公共场所规则过滤后的地点
+        filtered_count:
+          type: integer
+          description: 因分类或地址规则被过滤的结果数量
+      required:
+      - center
+      - coordinate_system
+      - filtered_count
+      - items
+      - provider
+      - provider_total
+      - query_keyword
+      - quick_keyword_code
+      - radius_m
     LoginRequestRequest:
       type: object
       description: 手机号验证码登录请求。
@@ -5323,6 +7072,10 @@ components:
           minLength: 6
           description: 六位数字验证码
           maxLength: 6
+        referral_context:
+          allOf:
+          - $ref: '#/components/schemas/ReferralContextRequest'
+          description: 分享入口归因信息；仅新用户注册时生效
       required:
       - code
       - phone
@@ -5450,11 +7203,14 @@ components:
             * `PROVIDER_PROFILE_PHOTO` - 服务者资料照片
             * `PROVIDER_APPLICATION_AVATAR` - 服务者申请头像
             * `PROVIDER_APPLICATION_LIFE_PHOTO` - 服务者申请生活照
+            * `IDENTITY_CARD_FRONT` - 实名认证身份证正面
+            * `IDENTITY_CARD_BACK` - 实名认证身份证反面
             * `PROVIDER_SERVICE_COVER` - 服务封面
             * `PROVIDER_SERVICE_GALLERY` - 服务图集
             * `MOMENT_IMAGE` - 动态图片
             * `MOMENT_VIDEO` - 动态视频
             * `NEWS_IMAGE` - 资讯图片
+            * `CHAT_IMAGE` - 聊天图片
         file:
           type: string
           format: binary
@@ -5462,6 +7218,169 @@ components:
       required:
       - file
       - purpose
+    MessageAck:
+      type: object
+      description: 消息发送幂等确认。
+      properties:
+        client_message_id:
+          type: string
+          description: 客户端幂等标识
+        message_no:
+          type: string
+          format: uuid
+          description: 服务端消息 UUID
+        sequence:
+          type: integer
+          description: 服务端分配的消息序号
+        reused:
+          type: boolean
+          description: 是否复用了此前相同幂等请求
+      required:
+      - client_message_id
+      - message_no
+      - reused
+      - sequence
+    MessageCreateRequestRequest:
+      type: object
+      description: 通过 HTTP 创建文本或图片聊天消息。
+      properties:
+        client_message_id:
+          type: string
+          minLength: 1
+          description: 客户端生成的幂等标识，同一消息重试必须保持一致
+          maxLength: 64
+        message_type:
+          allOf:
+          - $ref: '#/components/schemas/MessageTypeEnum'
+          description: |-
+            消息类型：TEXT 或 IMAGE
+
+            * `TEXT` - TEXT
+            * `IMAGE` - IMAGE
+        content:
+          type: string
+          description: 文本消息内容；图片消息可填写说明
+        media_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 聊天图片媒体 UUID；必须属于当前用户且用途为 CHAT_IMAGE
+      required:
+      - client_message_id
+      - message_type
+    MessageCreateResponse:
+      type: object
+      description: 消息创建和幂等确认响应。
+      properties:
+        message:
+          allOf:
+          - $ref: '#/components/schemas/MessageResponse'
+          description: 已保存的聊天消息
+        ack:
+          allOf:
+          - $ref: '#/components/schemas/MessageAck'
+          description: 消息幂等确认和序号
+      required:
+      - ack
+      - message
+    MessageListResponse:
+      type: object
+      description: 历史消息或断线补偿响应。
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: 订单会话 UUID
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponse'
+          description: 按消息序号排列的消息
+        next_cursor:
+          type: integer
+          nullable: true
+          description: 继续读取时使用的 before_sequence 游标
+        has_more:
+          type: boolean
+          description: 是否还有更多历史消息
+        latest_sequence:
+          type: integer
+          description: 会话当前最新消息序号
+        limit:
+          type: integer
+          description: 本页最大数量
+      required:
+      - conversation_id
+      - has_more
+      - items
+      - latest_sequence
+      - limit
+      - next_cursor
+    MessageResponse:
+      type: object
+      description: 文本、图片或系统聊天消息。
+      properties:
+        message_no:
+          type: string
+          format: uuid
+          description: 消息业务 UUID
+        conversation_id:
+          type: string
+          format: uuid
+          description: 所属订单会话 UUID
+        sequence:
+          type: integer
+          description: 会话内严格递增消息序号
+        sender_public_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: 发送者公开 UUID；系统消息为空
+        sender_role:
+          type: string
+          description: 发送者订单角色
+        message_type:
+          type: string
+          description: 消息类型：TEXT、IMAGE 或 SYSTEM
+        content:
+          type: string
+          description: 文本内容或图片说明
+        media:
+          allOf:
+          - $ref: '#/components/schemas/MediaAssetSummary'
+          nullable: true
+          description: 图片消息媒体
+        client_message_id:
+          type: string
+          nullable: true
+          description: 客户端幂等标识；重复请求返回同一条消息
+        created_at:
+          type: string
+          description: 消息创建时间，格式 YYYY-MM-DD HH:mm:ss
+        revoked_at:
+          type: string
+          nullable: true
+          description: 消息撤回时间，格式 YYYY-MM-DD HH:mm:ss；未撤回为空
+      required:
+      - client_message_id
+      - content
+      - conversation_id
+      - created_at
+      - media
+      - message_no
+      - message_type
+      - revoked_at
+      - sender_public_id
+      - sender_role
+      - sequence
+    MessageTypeEnum:
+      enum:
+      - TEXT
+      - IMAGE
+      type: string
+      description: |-
+        * `TEXT` - TEXT
+        * `IMAGE` - IMAGE
     MethodTypeEnum:
       enum:
       - BANK_CARD
@@ -6724,9 +8643,14 @@ components:
           type: integer
           minimum: 1
           description: 预约起始小时单元查询版本号
+        location_selection_token:
+          type: string
+          minLength: 1
+          description: 地点搜索接口返回的短期地点选择凭证；订单只接受已过滤公共场所
       required:
       - expected_service_version
       - expected_slot_version
+      - location_selection_token
       - service_id
       - slot_id
     OrderCustomerParticipant:
@@ -6754,6 +8678,64 @@ components:
       - nickname
       - phone_display
       - user_public_id
+    OrderMeetingLocation:
+      type: object
+      description: 订单见面地点快照，不含用户当前位置。
+      properties:
+        poi_id:
+          type: string
+          description: 地图 POI 标识
+        name:
+          type: string
+          description: 见面地点名称
+        address:
+          type: string
+          description: 见面地点完整地址
+        province:
+          type: string
+          description: 见面地点省份
+        city:
+          type: string
+          description: 见面地点城市
+        district:
+          type: string
+          description: 见面地点区县
+        latitude:
+          type: number
+          format: double
+          nullable: true
+          description: 见面地点纬度
+        longitude:
+          type: number
+          format: double
+          nullable: true
+          description: 见面地点经度
+        category_code:
+          type: string
+          description: 见面地点地图分类代码
+        source:
+          type: string
+          description: 地点来源
+        policy_version:
+          type: string
+          description: 地点过滤规则版本
+        selected_at:
+          type: string
+          format: date-time
+          description: 用户确认地点时间
+      required:
+      - address
+      - category_code
+      - city
+      - district
+      - latitude
+      - longitude
+      - name
+      - poi_id
+      - policy_version
+      - province
+      - selected_at
+      - source
     OrderNextAction:
       type: object
       description: 当前登录者可执行的订单操作。
@@ -6804,19 +8786,52 @@ components:
       - provider
     OrderPayRequestRequest:
       type: object
-      description: 钱包余额支付订单请求。
+      description: 余额、微信 App 或支付宝 App 支付订单请求。
       properties:
         expected_version:
           type: integer
           minimum: 1
           description: 当前订单版本号
         payment_method:
-          type: string
-          minLength: 1
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
           default: BALANCE
-          description: 支付方式，当前仅支持 BALANCE
+          description: |-
+            支付方式；外部支付必须通过回调确认成功
+
+            * `BALANCE` - BALANCE
+            * `WECHAT_APP` - WECHAT_APP
+            * `ALIPAY_APP` - ALIPAY_APP
       required:
       - expected_version
+    OrderPayResponse:
+      type: object
+      description: 订单支付发起结果。
+      properties:
+        order:
+          allOf:
+          - $ref: '#/components/schemas/OrderResponse'
+          description: 支付发起后的订单
+        payment:
+          allOf:
+          - $ref: '#/components/schemas/PaymentResponse'
+          description: 支付单及原生支付参数
+        payment_action:
+          allOf:
+          - $ref: '#/components/schemas/PaymentActionEnum'
+          description: |-
+            NONE 表示直接成功，NATIVE_PAY 表示需要调起客户端支付 SDK
+
+            * `NONE` - NONE
+            * `NATIVE_PAY` - NATIVE_PAY
+        reused:
+          type: boolean
+          description: 是否复用了相同幂等请求
+      required:
+      - order
+      - payment
+      - payment_action
+      - reused
     OrderPrice:
       type: object
       description: 订单价格快照。
@@ -6833,6 +8848,9 @@ components:
         platform_fee_amount_minor:
           type: integer
           description: 平台服务费，单位为分
+        platform_commission_amount_minor:
+          type: integer
+          description: 平台从服务者收入中抽取的佣金，单位为分
         payable_amount_minor:
           type: integer
           description: 订单应付金额，单位为分
@@ -6848,6 +8866,7 @@ components:
       - original_amount_minor
       - paid_amount_minor
       - payable_amount_minor
+      - platform_commission_amount_minor
       - platform_fee_amount_minor
       - refunded_amount_minor
     OrderProgress:
@@ -7029,6 +9048,9 @@ components:
           type: string
           format: uuid
           description: 预约起始小时单元 UUID；后端按服务时长检查连续单元
+        location_selection_token:
+          type: string
+          description: 可选的地点选择凭证，用于报价确认地点摘要
       required:
       - service_id
       - slot_id
@@ -7057,6 +9079,9 @@ components:
         platform_fee_amount_minor:
           type: integer
           description: 平台服务费，当前为 0，单位为币种最小单位
+        platform_commission_amount_minor:
+          type: integer
+          description: 平台从服务者收入中抽取的佣金，不增加用户应付金额，单位为分
         payable_amount_minor:
           type: integer
           description: 最终应付金额，单位为币种最小单位
@@ -7079,6 +9104,11 @@ components:
           items:
             $ref: '#/components/schemas/OrderQuoteDiscount'
           description: 优惠明细
+        meeting_location:
+          allOf:
+          - $ref: '#/components/schemas/OrderMeetingLocation'
+          nullable: true
+          description: 本次试算关联的见面地点摘要；未提供凭证时为空
         quoted_at:
           type: string
           format: date-time
@@ -7090,9 +9120,11 @@ components:
       - discount_amount_minor
       - discounts
       - hourly_amount_minor
+      - meeting_location
       - original_amount_minor
       - payable_amount_minor
       - payable_display
+      - platform_commission_amount_minor
       - platform_fee_amount_minor
       - pricing_unit
       - quoted_at
@@ -7118,6 +9150,7 @@ components:
 
             * `PENDING` - PENDING
             * `REJECTED` - REJECTED
+            * `PROCESSING` - PROCESSING
             * `REFUNDED` - REFUNDED
             * `FAILED` - FAILED
             * `CANCELED` - CANCELED
@@ -7236,6 +9269,7 @@ components:
       enum:
       - PENDING
       - REJECTED
+      - PROCESSING
       - REFUNDED
       - FAILED
       - CANCELED
@@ -7243,6 +9277,7 @@ components:
       description: |-
         * `PENDING` - PENDING
         * `REJECTED` - REJECTED
+        * `PROCESSING` - PROCESSING
         * `REFUNDED` - REFUNDED
         * `FAILED` - FAILED
         * `CANCELED` - CANCELED
@@ -7276,6 +9311,11 @@ components:
           type: object
           additionalProperties: {}
           description: 预约时段快照
+        meeting_location:
+          allOf:
+          - $ref: '#/components/schemas/OrderMeetingLocation'
+          nullable: true
+          description: 订单见面地点快照，仅订单参与人可访问
         participants:
           allOf:
           - $ref: '#/components/schemas/OrderParticipants'
@@ -7328,6 +9368,7 @@ components:
       - completed_at
       - contact
       - created_at
+      - meeting_location
       - note
       - order_no
       - paid_at
@@ -7519,6 +9560,35 @@ components:
           type: integer
           minimum: 0
           description: 人工置顶优先级，数值越小越靠前，0 表示不置顶
+    PatchedLocationQuickKeywordUpdateRequest:
+      type: object
+      description: 管理员更新地点快捷关键词请求。
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+          description: 当前配置版本号
+        label:
+          type: string
+          minLength: 1
+          description: 前端展示名称
+          maxLength: 50
+        query_keyword:
+          type: string
+          minLength: 1
+          description: 提交给地图服务的搜索关键词
+          maxLength: 100
+        icon:
+          type: string
+          description: 前端图标标识或静态资源名称
+          maxLength: 255
+        sort_order:
+          type: integer
+          minimum: 0
+          description: 展示排序值，数值越小越靠前
+        enabled:
+          type: boolean
+          description: 是否允许前端使用
     PatchedMomentUpdateRequestRequest:
       type: object
       description: 图文动态修改请求。
@@ -7752,6 +9822,22 @@ components:
           writeOnly: true
           minLength: 1
           description: 中国大陆身份证号；仅写入并加密保存，不返回
+        id_card_front_media_id:
+          type: string
+          minLength: 1
+          description: 本人上传的身份证正面照片媒体 ID，仅用于实名认证和审核
+        id_card_back_media_id:
+          type: string
+          minLength: 1
+          description: 本人上传的身份证反面照片媒体 ID，仅用于实名认证和审核
+        emergency_contact_name:
+          type: string
+          minLength: 1
+          description: 紧急联系人姓名；服务端加密保存
+        emergency_contact_phone:
+          type: string
+          minLength: 1
+          description: 紧急联系人手机号；服务端加密保存，只返回脱敏值
         avatar_media_id:
           type: string
           minLength: 1
@@ -7905,6 +9991,164 @@ components:
           type: integer
           minimum: 1
           description: 查询接口返回的服务版本号
+    PaymentActionEnum:
+      enum:
+      - NONE
+      - NATIVE_PAY
+      type: string
+      description: |-
+        * `NONE` - NONE
+        * `NATIVE_PAY` - NATIVE_PAY
+    PaymentDetail:
+      type: object
+      description: 当前用户支付单安全查询响应。
+      properties:
+        payment_no:
+          type: string
+          format: uuid
+          description: 支付单 UUID
+        order_no:
+          type: string
+          format: uuid
+          description: 关联订单 UUID
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          description: |-
+            支付方式
+
+            * `BALANCE` - BALANCE
+            * `WECHAT_APP` - WECHAT_APP
+            * `ALIPAY_APP` - ALIPAY_APP
+        payment_channel:
+          type: string
+          description: 支付渠道代码
+        currency:
+          type: string
+          description: 支付币种
+        amount_minor:
+          type: integer
+          description: 支付金额，单位为分
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusF90Enum'
+          description: |-
+            支付单状态
+
+            * `PENDING` - PENDING
+            * `SUCCESS` - SUCCESS
+            * `FAILED` - FAILED
+            * `CLOSED` - CLOSED
+            * `REFUNDED` - REFUNDED
+        client_payload:
+          type: object
+          additionalProperties: {}
+          description: 原生支付 SDK 调起参数
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付参数失效时间
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付成功时间
+        version:
+          type: integer
+          description: 支付单版本号
+      required:
+      - amount_minor
+      - client_payload
+      - currency
+      - expires_at
+      - order_no
+      - paid_at
+      - payment_channel
+      - payment_method
+      - payment_no
+      - status
+      - version
+    PaymentMethodEnum:
+      enum:
+      - BALANCE
+      - WECHAT_APP
+      - ALIPAY_APP
+      type: string
+      description: |-
+        * `BALANCE` - BALANCE
+        * `WECHAT_APP` - WECHAT_APP
+        * `ALIPAY_APP` - ALIPAY_APP
+    PaymentResponse:
+      type: object
+      description: 订单支付单和原生支付 SDK 参数。
+      properties:
+        payment_no:
+          type: string
+          format: uuid
+          description: 支付单 UUID
+        order_no:
+          type: string
+          format: uuid
+          description: 关联订单 UUID
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          description: |-
+            支付方式
+
+            * `BALANCE` - BALANCE
+            * `WECHAT_APP` - WECHAT_APP
+            * `ALIPAY_APP` - ALIPAY_APP
+        payment_channel:
+          type: string
+          description: 支付渠道代码
+        currency:
+          type: string
+          description: 支付币种
+        amount_minor:
+          type: integer
+          description: 支付金额，单位为分
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusF90Enum'
+          description: |-
+            支付单状态
+
+            * `PENDING` - PENDING
+            * `SUCCESS` - SUCCESS
+            * `FAILED` - FAILED
+            * `CLOSED` - CLOSED
+            * `REFUNDED` - REFUNDED
+        client_payload:
+          type: object
+          additionalProperties: {}
+          description: 微信或支付宝原生 SDK 调起参数；余额支付为空对象
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付参数失效时间
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付成功时间
+        version:
+          type: integer
+          description: 支付单版本号
+      required:
+      - amount_minor
+      - client_payload
+      - currency
+      - expires_at
+      - order_no
+      - paid_at
+      - payment_channel
+      - payment_method
+      - payment_no
+      - status
+      - version
     PayoutMethodCreateRequestRequest:
       type: object
       description: 创建银行卡、支付宝或微信收款方式请求。
@@ -8028,6 +10272,85 @@ components:
       - updated_at
       - verification_status
       - version
+    PhoneBindingRequestRequest:
+      type: object
+      description: 第三方账号手动绑定手机号请求。
+      properties:
+        phone:
+          type: string
+          minLength: 1
+          description: 需要绑定的中国大陆手机号
+          maxLength: 20
+        code:
+          type: string
+          minLength: 6
+          description: 六位数字验证码
+          maxLength: 6
+        referral_context:
+          allOf:
+          - $ref: '#/components/schemas/ReferralContextRequest'
+          description: 分享入口归因信息；第三方账号完成手机号绑定时生效
+      required:
+      - code
+      - phone
+    PhoneBindingResponse:
+      type: object
+      description: 手机号绑定完成响应，合并账号后返回新会话令牌。
+      properties:
+        token_type:
+          type: string
+          description: 令牌类型，当前固定为 Bearer
+        access_token:
+          type: string
+          description: 短期访问令牌
+        refresh_token:
+          type: string
+          description: 当前设备会话刷新令牌
+        expires_in:
+          type: integer
+          description: 访问令牌剩余有效期，单位为秒
+        refresh_expires_in:
+          type: integer
+          description: 刷新令牌剩余有效期，单位为秒
+        user_public_id:
+          type: string
+          format: uuid
+          description: 对外用户标识
+        is_new_user:
+          type: boolean
+          description: 本次登录是否自动创建新用户
+        requires_identity_selection:
+          type: boolean
+          description: 是否仍需选择首次身份
+        requires_phone_binding:
+          type: boolean
+          description: 是否仍需手动绑定手机号
+        already_bound:
+          type: boolean
+          description: 本次请求是否为重复绑定
+        merged:
+          type: boolean
+          description: 是否合并到已经注册且未绑定第三方账号的手机号账号
+      required:
+      - access_token
+      - already_bound
+      - expires_in
+      - is_new_user
+      - merged
+      - refresh_expires_in
+      - refresh_token
+      - requires_identity_selection
+      - requires_phone_binding
+      - token_type
+      - user_public_id
+    PlatformEnum:
+      enum:
+      - IOS
+      - ANDROID
+      type: string
+      description: |-
+        * `IOS` - IOS
+        * `ANDROID` - ANDROID
     ProfileResponse:
       type: object
       description: 当前用户个人资料响应。
@@ -8092,6 +10415,102 @@ components:
       - trust_level
       - updated_at
       - version
+    ProfileShare:
+      type: object
+      description: 分享链接和未来微信分享卡片字段。
+      properties:
+        link_url:
+          type: string
+          description: 复制链接使用的公开个人主页地址
+        title:
+          type: string
+          description: 微信分享标题，微信分享接入后使用
+        description:
+          type: string
+          description: 微信分享描述，微信分享接入后使用
+      required:
+      - description
+      - link_url
+      - title
+    ProfileSharePosterResponse:
+      type: object
+      description: 前端绘制个人分享海报所需的数据。
+      properties:
+        brand_name:
+          type: string
+          description: 海报品牌行
+        brand_label:
+          type: string
+          description: 海报右上角品牌小字
+        slogan_line_1:
+          type: string
+          description: 主文案第一行
+        slogan_line_2:
+          type: string
+          description: 主文案第二行高亮文案
+        slogan_subtitle:
+          type: string
+          description: 主文案下方说明句
+        cover:
+          allOf:
+          - $ref: '#/components/schemas/MediaAssetSummary'
+          nullable: true
+          description: 海报主视觉图；当前优先使用个人头像，没有头像时为空
+        nickname:
+          type: string
+          description: 用户昵称；未填写时使用默认展示名
+        age:
+          type: integer
+          nullable: true
+          description: 用户填写年龄；未填写时为空
+        city:
+          type: string
+          description: 城市展示名称，无配置时回退为城市代码
+        signature:
+          type: string
+          description: 个人个性签名，可为空字符串
+        interest_tags:
+          type: array
+          items:
+            type: string
+          description: 兴趣标签展示名称，最多 5 个
+        profile_url:
+          type: string
+          description: 用户主页公开链接，用于生成二维码
+        qr_image_url:
+          type: string
+          description: 后端生成的二维码图片短期地址，可直接用图片组件加载
+        qr_image_expires_at:
+          type: string
+          description: 二维码图片地址过期时间，格式 YYYY-MM-DD HH:mm:ss
+        card_footer:
+          type: string
+          description: 卡片底部提示文案
+        bottom_slogan:
+          type: string
+          description: 海报底部标语
+        share:
+          allOf:
+          - $ref: '#/components/schemas/ProfileShare'
+          description: 复制链接和微信分享卡片字段
+      required:
+      - age
+      - bottom_slogan
+      - brand_label
+      - brand_name
+      - card_footer
+      - city
+      - cover
+      - interest_tags
+      - nickname
+      - profile_url
+      - qr_image_expires_at
+      - qr_image_url
+      - share
+      - signature
+      - slogan_line_1
+      - slogan_line_2
+      - slogan_subtitle
     ProfileSummaryResponse:
       type: object
       description: 我的页面订单、收藏和关注数量汇总。
@@ -8213,6 +10632,22 @@ components:
           writeOnly: true
           minLength: 1
           description: 中国大陆身份证号；仅写入并加密保存，不返回
+        id_card_front_media_id:
+          type: string
+          minLength: 1
+          description: 本人上传的身份证正面照片媒体 ID，仅用于实名认证和审核
+        id_card_back_media_id:
+          type: string
+          minLength: 1
+          description: 本人上传的身份证反面照片媒体 ID，仅用于实名认证和审核
+        emergency_contact_name:
+          type: string
+          minLength: 1
+          description: 紧急联系人姓名；服务端加密保存
+        emergency_contact_phone:
+          type: string
+          minLength: 1
+          description: 紧急联系人手机号；服务端加密保存，只返回脱敏值
         avatar_media_id:
           type: string
           minLength: 1
@@ -8225,6 +10660,10 @@ components:
           description: 本人上传的生活照媒体 ID 列表，数量受服务端配置限制
       required:
       - avatar_media_id
+      - emergency_contact_name
+      - emergency_contact_phone
+      - id_card_back_media_id
+      - id_card_front_media_id
       - id_card_number
       - introduction
       - life_photo_media_ids
@@ -8247,6 +10686,20 @@ components:
           type: string
           nullable: true
           description: 头像媒体 ID
+        id_card_front_media_id:
+          type: string
+          nullable: true
+          description: 身份证正面照片媒体 ID，不返回身份证号码或姓名
+        id_card_back_media_id:
+          type: string
+          nullable: true
+          description: 身份证反面照片媒体 ID，不返回身份证号码或姓名
+        emergency_contact_name:
+          type: string
+          description: 紧急联系人姓名
+        emergency_contact_phone_masked:
+          type: string
+          description: 紧急联系人手机号脱敏展示值，不返回完整手机号
         life_photo_media_ids:
           type: array
           items:
@@ -8286,6 +10739,16 @@ components:
           - $ref: '#/components/schemas/MediaAssetSummary'
           nullable: true
           description: 头像媒体安全摘要
+        id_card_front_media:
+          allOf:
+          - $ref: '#/components/schemas/MediaAssetSummary'
+          nullable: true
+          description: 身份证正面照片安全摘要，仅本人和管理员审核接口可读取
+        id_card_back_media:
+          allOf:
+          - $ref: '#/components/schemas/MediaAssetSummary'
+          nullable: true
+          description: 身份证反面照片安全摘要，仅本人和管理员审核接口可读取
         life_photo_media:
           type: array
           items:
@@ -8295,7 +10758,13 @@ components:
       - application_no
       - avatar_media
       - avatar_media_id
+      - emergency_contact_name
+      - emergency_contact_phone_masked
       - face_status
+      - id_card_back_media
+      - id_card_back_media_id
+      - id_card_front_media
+      - id_card_front_media_id
       - introduction
       - life_photo_media
       - life_photo_media_ids
@@ -8307,6 +10776,266 @@ components:
       - user_phone_masked
       - user_public_id
       - version
+    ProviderDashboardComparison:
+      type: object
+      description: 当前周期相对上一周期的变化。
+      properties:
+        view_count_delta_percent:
+          type: number
+          format: double
+          nullable: true
+          description: 浏览量变化百分比
+        visitor_count_delta_percent:
+          type: number
+          format: double
+          nullable: true
+          description: 访客数变化百分比
+        order_count_delta_percent:
+          type: number
+          format: double
+          nullable: true
+          description: 订单量变化百分比
+        conversion_rate_delta_percent:
+          type: number
+          format: double
+          nullable: true
+          description: 转化率变化百分比
+        income_delta_percent:
+          type: number
+          format: double
+          nullable: true
+          description: 收入变化百分比
+      required:
+      - conversion_rate_delta_percent
+      - income_delta_percent
+      - order_count_delta_percent
+      - view_count_delta_percent
+      - visitor_count_delta_percent
+    ProviderDashboardOverview:
+      type: object
+      description: 选定周期的数据概览。
+      properties:
+        view_count:
+          type: integer
+          description: 主页浏览量
+        visitor_count:
+          type: integer
+          description: 主页独立访客数
+        created_order_count:
+          type: integer
+          description: 周期内创建订单数量
+        completed_order_count:
+          type: integer
+          description: 周期内完成订单数量
+        conversion_rate_bps:
+          type: integer
+          nullable: true
+          description: 完成订单/浏览量转化率万分比，无浏览量时为空
+        income_minor:
+          type: integer
+          description: 周期内服务者收入，单位为分
+        income_display:
+          type: string
+          description: 周期收入展示金额
+        tracking_available:
+          type: boolean
+          description: 是否已有浏览分析数据
+      required:
+      - completed_order_count
+      - conversion_rate_bps
+      - created_order_count
+      - income_display
+      - income_minor
+      - tracking_available
+      - view_count
+      - visitor_count
+    ProviderDashboardPending:
+      type: object
+      description: 服务者工作台待处理事项数量。
+      properties:
+        new_order_count:
+          type: integer
+          description: 待接单的新订单数量
+        pending_confirm_count:
+          type: integer
+          description: 待用户确认的订单数量
+        pending_review_count:
+          type: integer
+          description: 已完成但用户尚未评价且仍在评价期限内的订单数量
+      required:
+      - new_order_count
+      - pending_confirm_count
+      - pending_review_count
+    ProviderDashboardResponse:
+      type: object
+      description: 服务者工作台和数据看板响应。
+      properties:
+        range:
+          type: object
+          additionalProperties: {}
+          description: 统计周期、日期范围和时区
+        today:
+          allOf:
+          - $ref: '#/components/schemas/ProviderDashboardToday'
+          description: 今日概览
+        overview:
+          allOf:
+          - $ref: '#/components/schemas/ProviderDashboardOverview'
+          description: 周期概览
+        comparison:
+          allOf:
+          - $ref: '#/components/schemas/ProviderDashboardComparison'
+          description: 较上期变化
+        income_trend:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderIncomeTrendItem'
+          description: 收入趋势
+        funnel:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderFunnelItem'
+          description: 转化漏斗
+        suggestions:
+          type: array
+          items:
+            type: string
+          description: 规则化经营建议
+      required:
+      - comparison
+      - funnel
+      - income_trend
+      - overview
+      - range
+      - suggestions
+      - today
+    ProviderDashboardToday:
+      type: object
+      description: 服务者今日经营概览。
+      properties:
+        income_minor:
+          type: integer
+          description: 今日服务者收入，单位为分
+        income_display:
+          type: string
+          description: 今日收入展示金额
+        created_order_count:
+          type: integer
+          description: 今日创建订单数量
+        pending_items:
+          allOf:
+          - $ref: '#/components/schemas/ProviderDashboardPending'
+          description: 当前待处理事项
+      required:
+      - created_order_count
+      - income_display
+      - income_minor
+      - pending_items
+    ProviderFunnelItem:
+      type: object
+      description: 转化漏斗阶段。
+      properties:
+        event_type:
+          type: string
+          description: 分析事件类型
+        label:
+          type: string
+          description: 前端展示阶段名称
+        count:
+          type: integer
+          description: 阶段事件数量
+      required:
+      - count
+      - event_type
+      - label
+    ProviderIncomeTrendItem:
+      type: object
+      description: 按自然日的服务者收入趋势。
+      properties:
+        date:
+          type: string
+          description: 统计日期 YYYY-MM-DD
+        income_minor:
+          type: integer
+          description: 当日收入，单位为分
+        income_display:
+          type: string
+          description: 当日收入展示金额
+        order_count:
+          type: integer
+          description: 当日收益记录数量
+      required:
+      - date
+      - income_display
+      - income_minor
+      - order_count
+    ProviderLocationStatusResponse:
+      type: object
+      description: 服务者位置状态响应，不返回经纬度。
+      properties:
+        location_status:
+          type: string
+          description: 位置状态：ACTIVE 或 REVOKED
+        location_freshness:
+          type: string
+          description: 位置新鲜度：CURRENT 或 UNKNOWN
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 位置有效期
+        version:
+          type: integer
+          description: 位置状态版本号
+      required:
+      - expires_at
+      - location_freshness
+      - location_status
+      - version
+    ProviderLocationUpdateRequest:
+      type: object
+      description: 服务者登录后更新当前模糊位置的请求。
+      properties:
+        latitude:
+          type: number
+          format: double
+          description: 服务者当前位置纬度
+        longitude:
+          type: number
+          format: double
+          description: 服务者当前位置经度
+        coordinate_system:
+          allOf:
+          - $ref: '#/components/schemas/CoordinateSystemEnum'
+          default: GCJ02
+          description: |-
+            客户端坐标系，支持 GCJ02 或 WGS84
+
+            * `GCJ02` - GCJ02
+            * `WGS84` - WGS84
+        accuracy_m:
+          type: integer
+          maximum: 10000
+          minimum: 0
+          default: 0
+          description: 客户端定位精度，单位为米
+        source:
+          allOf:
+          - $ref: '#/components/schemas/SourceEnum'
+          default: LOGIN
+          description: |-
+            定位更新来源，登录更新默认 LOGIN
+
+            * `LOGIN` - LOGIN
+            * `PERIODIC` - PERIODIC
+            * `MANUAL` - MANUAL
+        privacy_version:
+          type: string
+          description: 用户确认的位置隐私授权版本
+          maxLength: 32
+      required:
+      - latitude
+      - longitude
     ProviderProfileResponse:
       type: object
       description: 服务者资料安全响应。
@@ -8652,11 +11381,14 @@ components:
       - PROVIDER_PROFILE_PHOTO
       - PROVIDER_APPLICATION_AVATAR
       - PROVIDER_APPLICATION_LIFE_PHOTO
+      - IDENTITY_CARD_FRONT
+      - IDENTITY_CARD_BACK
       - PROVIDER_SERVICE_COVER
       - PROVIDER_SERVICE_GALLERY
       - MOMENT_IMAGE
       - MOMENT_VIDEO
       - NEWS_IMAGE
+      - CHAT_IMAGE
       type: string
       description: |-
         * `USER_PROFILE_AVATAR` - 用户个人资料头像
@@ -8664,11 +11396,263 @@ components:
         * `PROVIDER_PROFILE_PHOTO` - 服务者资料照片
         * `PROVIDER_APPLICATION_AVATAR` - 服务者申请头像
         * `PROVIDER_APPLICATION_LIFE_PHOTO` - 服务者申请生活照
+        * `IDENTITY_CARD_FRONT` - 实名认证身份证正面
+        * `IDENTITY_CARD_BACK` - 实名认证身份证反面
         * `PROVIDER_SERVICE_COVER` - 服务封面
         * `PROVIDER_SERVICE_GALLERY` - 服务图集
         * `MOMENT_IMAGE` - 动态图片
         * `MOMENT_VIDEO` - 动态视频
         * `NEWS_IMAGE` - 资讯图片
+        * `CHAT_IMAGE` - 聊天图片
+    RealNameVerificationRequestRequest:
+      type: object
+      description: 提交真实姓名、身份证号和正反面照片请求。
+      properties:
+        real_name:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: 真实姓名；仅写入加密保存
+        id_card_number:
+          type: string
+          writeOnly: true
+          minLength: 1
+          description: 中国大陆身份证号；仅写入加密保存
+        id_card_front_media_id:
+          type: string
+          minLength: 1
+          description: 本人上传的身份证正面照片媒体 ID
+        id_card_back_media_id:
+          type: string
+          minLength: 1
+          description: 本人上传的身份证反面照片媒体 ID
+        expected_version:
+          type: integer
+          minimum: 0
+          default: 0
+          description: 查询返回的认证版本号；首次提交为 0
+      required:
+      - id_card_back_media_id
+      - id_card_front_media_id
+      - id_card_number
+      - real_name
+    ReferralContextRequest:
+      type: object
+      description: 分享入口携带的邀请归因上下文。
+      properties:
+        invite_code:
+          type: string
+          description: 分享邀请码；仅在新用户注册时用于绑定直接邀请人
+          maxLength: 16
+        share_no:
+          type: string
+          description: 分享链接标识，用于来源转化统计
+          maxLength: 64
+        share_id:
+          type: string
+          description: share_no 的兼容别名
+          maxLength: 64
+        channel:
+          type: string
+          description: 分享渠道，例如 WECHAT、POSTER
+          maxLength: 32
+        campaign_code:
+          type: string
+          description: 运营活动代码，可为空
+          maxLength: 64
+        visitor_id:
+          type: string
+          description: 客户端匿名访问标识，服务端只保存摘要
+          maxLength: 128
+    ReferralContextRequestRequest:
+      type: object
+      description: 分享访问和注册归因上下文。
+      properties:
+        share_no:
+          type: string
+          description: 分享链接 UUID
+        share_id:
+          type: string
+          description: share_no 的兼容别名
+        invite_code:
+          type: string
+          description: 邀请码
+        visitor_id:
+          type: string
+          description: 客户端匿名访问标识，服务端只保存摘要
+    ReferralOverviewResponse:
+      type: object
+      description: 分享赚钱页总览。
+      properties:
+        invite_code:
+          type: string
+          description: 当前用户专属邀请码
+        share_link:
+          allOf:
+          - $ref: '#/components/schemas/ShareLinkResponse'
+          description: 个人海报稳定分享链接
+        registered_count:
+          type: integer
+          description: 直接邀请注册人数
+        ordered_user_count:
+          type: integer
+          description: 产生已完成订单的被邀请人数
+        valid_order_amount_minor:
+          type: integer
+          description: 有效订单奖励基数合计，单位为分
+        reward_summary:
+          type: object
+          additionalProperties: {}
+          description: 按奖励状态汇总数量和金额
+      required:
+      - invite_code
+      - ordered_user_count
+      - registered_count
+      - reward_summary
+      - share_link
+      - valid_order_amount_minor
+    ReferralPolicyRequestRequest:
+      type: object
+      description: 创建不可变奖励政策版本请求。
+      properties:
+        version:
+          type: integer
+          minimum: 1
+          description: 递增政策版本号
+        name:
+          type: string
+          description: 政策名称
+        reward_rate_bps:
+          type: integer
+          maximum: 10000
+          minimum: 0
+          description: 奖励比例万分比，1000 表示 10%
+        max_reward_amount_minor:
+          type: integer
+          minimum: 0
+          nullable: true
+          description: 单笔奖励上限，单位为分；null 表示不限制
+        min_order_amount_minor:
+          type: integer
+          minimum: 0
+          description: 最低有效订单金额，单位为分
+        funding_cap_to_platform_fee:
+          type: boolean
+          description: 奖励是否受订单平台服务费资金来源限制
+        settlement_delay_days:
+          type: integer
+          minimum: 0
+          description: 订单完成后的观察和结算延迟天数
+        effective_from:
+          type: string
+          format: date-time
+          description: 政策开始生效时间
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+          description: 政策停止生效时间
+      required:
+      - effective_from
+      - reward_rate_bps
+      - version
+    ReferralPolicyResponse:
+      type: object
+      description: 奖励政策版本响应。
+      properties:
+        policy_no:
+          type: string
+          format: uuid
+          description: 政策版本 UUID
+        version:
+          type: integer
+          description: 政策版本号
+        name:
+          type: string
+          description: 政策名称
+        status:
+          type: string
+          description: 政策状态
+        reward_rate_bps:
+          type: integer
+          description: 奖励比例万分比
+        max_reward_amount_minor:
+          type: integer
+          nullable: true
+          description: 单笔奖励上限，单位为分
+        min_order_amount_minor:
+          type: integer
+          description: 最低有效订单金额，单位为分
+        funding_cap_to_platform_fee:
+          type: boolean
+          description: 是否受平台服务费限制
+        settlement_delay_days:
+          type: integer
+          description: 结算延迟天数
+        effective_from:
+          type: string
+          format: date-time
+          description: 开始生效时间
+        effective_to:
+          type: string
+          format: date-time
+          nullable: true
+          description: 停止生效时间
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+      required:
+      - created_at
+      - effective_from
+      - effective_to
+      - funding_cap_to_platform_fee
+      - max_reward_amount_minor
+      - min_order_amount_minor
+      - name
+      - policy_no
+      - reward_rate_bps
+      - settlement_delay_days
+      - status
+      - version
+    ReferralPolicyRetireResponse:
+      type: object
+      description: 停止奖励政策版本结果。
+      properties:
+        policy_no:
+          type: string
+          format: uuid
+          description: 政策版本 UUID
+        status:
+          type: string
+          description: 停止后的政策状态
+      required:
+      - policy_no
+      - status
+    ReferralVisitResponse:
+      type: object
+      description: 匿名分享访问记录结果。
+      properties:
+        visit_no:
+          type: string
+          format: uuid
+          description: 访问记录 UUID
+        share_no:
+          type: string
+          format: uuid
+          description: 来源分享链接 UUID
+        invite_code:
+          type: string
+          description: 来源邀请码
+        occurred_at:
+          type: string
+          format: date-time
+          description: 访问时间
+      required:
+      - invite_code
+      - occurred_at
+      - share_no
+      - visit_no
     RefreshRequestRequest:
       type: object
       description: 访问令牌刷新请求。
@@ -9005,6 +11989,132 @@ components:
       - avatar_media
       - nickname
       - public_id
+    RewardAdjustRequestRequest:
+      type: object
+      description: 奖励人工调整请求。
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+          description: 查询返回的奖励版本号
+        amount_delta_minor:
+          type: integer
+          description: 奖励变化量，单位为分，可正可负
+        reason:
+          type: string
+          minLength: 2
+          description: 调整原因
+          maxLength: 255
+      required:
+      - amount_delta_minor
+      - expected_version
+      - reason
+    RewardListResponse:
+      type: object
+      description: 推广奖励分页列表。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RewardResponse'
+          description: 奖励明细
+        total:
+          type: integer
+          description: 筛选后奖励总数
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页数量
+      required:
+      - items
+      - page
+      - page_size
+      - total
+    RewardResponse:
+      type: object
+      description: 推广奖励安全明细。
+      properties:
+        reward_no:
+          type: string
+          format: uuid
+          description: 奖励业务 UUID
+        order_no:
+          type: string
+          description: 关联订单号
+        currency:
+          type: string
+          description: 奖励币种
+        reward_base_minor:
+          type: integer
+          description: 有效奖励基数，单位为分
+        reward_rate_bps:
+          type: integer
+          description: 订单锁定奖励比例万分比
+        amount_minor:
+          type: integer
+          description: 当前奖励金额，单位为分
+        status:
+          type: string
+          description: 奖励状态
+        settle_after:
+          type: string
+          format: date-time
+          description: 最早结算时间
+        settled_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 实际结算时间
+        cancel_reason:
+          type: string
+          description: 冻结或取消原因
+        version:
+          type: integer
+          description: 奖励乐观锁版本号
+        policy_version:
+          type: integer
+          description: 奖励政策版本号
+        created_at:
+          type: string
+          format: date-time
+          description: 奖励创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 奖励最近更新时间
+      required:
+      - amount_minor
+      - cancel_reason
+      - created_at
+      - currency
+      - order_no
+      - policy_version
+      - reward_base_minor
+      - reward_no
+      - reward_rate_bps
+      - settle_after
+      - settled_at
+      - status
+      - updated_at
+      - version
+    RewardStateRequestRequest:
+      type: object
+      description: 奖励冻结、解冻或取消请求。
+      properties:
+        expected_version:
+          type: integer
+          minimum: 1
+          description: 查询返回的奖励版本号
+        reason:
+          type: string
+          minLength: 2
+          description: 操作原因
+          maxLength: 255
+      required:
+      - expected_version
+      - reason
     ScheduleBulkError:
       type: object
       description: 批量排期操作的结构化跳过或失败说明。
@@ -10054,10 +13164,26 @@ components:
         requires_identity_selection:
           type: boolean
           description: 是否仍需选择首次身份
+        requires_phone_binding:
+          type: boolean
+          description: 是否仍需手动绑定手机号
+        auth_methods:
+          type: array
+          items:
+            type: string
+          description: 已启用登录方式，例如 PHONE、WECHAT、APPLE
         primary_role:
           type: string
           nullable: true
-          description: 首次选择的身份
+          description: 当前主身份
+        current_role:
+          type: string
+          description: 客户端当前应使用的身份
+        roles:
+          type: array
+          items:
+            type: string
+          description: 当前可用身份列表，服务者审核通过后包含 USER 和 PROVIDER
         default_workspace:
           type: string
           nullable: true
@@ -10071,14 +13197,80 @@ components:
           nullable: true
           description: 当前用户最新服务者申请摘要，包含临时图片展示地址
       required:
+      - auth_methods
+      - current_role
       - default_workspace
       - phone_masked
       - primary_role
       - provider_application
       - provider_status
       - requires_identity_selection
+      - requires_phone_binding
+      - roles
       - status
       - user_public_id
+    ShareLinkRequestRequest:
+      type: object
+      description: 创建分享链接请求。
+      properties:
+        channel:
+          allOf:
+          - $ref: '#/components/schemas/ChannelEnum'
+          description: |-
+            分享渠道
+
+            * `WECHAT` - WECHAT
+            * `MOMENTS` - MOMENTS
+            * `POSTER` - POSTER
+            * `SYSTEM` - SYSTEM
+            * `OTHER` - OTHER
+        campaign_code:
+          type: string
+          description: 运营活动代码
+          maxLength: 64
+      required:
+      - channel
+    ShareLinkResponse:
+      type: object
+      description: 分享链接响应。
+      properties:
+        share_no:
+          type: string
+          format: uuid
+          description: 分享链接 UUID
+        invite_code:
+          type: string
+          description: 专属邀请码
+        channel:
+          type: string
+          description: 分享渠道
+        campaign_code:
+          type: string
+          description: 运营活动代码
+        status:
+          type: string
+          description: 分享链接状态
+        share_url:
+          type: string
+          description: 带邀请归因参数的公开分享链接
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 过期时间，可为空
+      required:
+      - campaign_code
+      - channel
+      - created_at
+      - expires_at
+      - invite_code
+      - share_no
+      - share_url
+      - status
     SmsCodeRequestRequest:
       type: object
       description: 发送手机号验证码请求。
@@ -10112,6 +13304,16 @@ components:
       - expires_in
       - request_id
       - reused
+    SourceEnum:
+      enum:
+      - LOGIN
+      - PERIODIC
+      - MANUAL
+      type: string
+      description: |-
+        * `LOGIN` - LOGIN
+        * `PERIODIC` - PERIODIC
+        * `MANUAL` - MANUAL
     SourceTypeEnum:
       enum:
       - RSS
@@ -10122,6 +13324,20 @@ components:
         * `RSS` - RSS
         * `API` - API
         * `MANUAL` - MANUAL
+    StatusF90Enum:
+      enum:
+      - PENDING
+      - SUCCESS
+      - FAILED
+      - CLOSED
+      - REFUNDED
+      type: string
+      description: |-
+        * `PENDING` - PENDING
+        * `SUCCESS` - SUCCESS
+        * `FAILED` - FAILED
+        * `CLOSED` - CLOSED
+        * `REFUNDED` - REFUNDED
     TargetTypeEnum:
       enum:
       - PROVIDER
@@ -10163,6 +13379,9 @@ components:
         requires_identity_selection:
           type: boolean
           description: 是否仍需选择首次身份
+        requires_phone_binding:
+          type: boolean
+          description: 是否仍需手动绑定手机号
       required:
       - access_token
       - expires_in
@@ -10170,6 +13389,7 @@ components:
       - refresh_expires_in
       - refresh_token
       - requires_identity_selection
+      - requires_phone_binding
       - token_type
       - user_public_id
     TrendingKeywordResponse:
@@ -10256,6 +13476,39 @@ components:
         * `IMAGE` - IMAGE
         * `VIDEO` - VIDEO
         * `LINK` - LINK
+    UnreadConversation:
+      type: object
+      description: 单个订单会话未读摘要。
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: 订单会话 UUID
+        unread_count:
+          type: integer
+          description: 会话未读消息数
+      required:
+      - conversation_id
+      - unread_count
+    UnreadSummaryResponse:
+      type: object
+      description: 当前用户全部订单会话未读汇总。
+      properties:
+        total_unread:
+          type: integer
+          description: 全部未读消息总数
+        conversation_count:
+          type: integer
+          description: 存在未读消息的会话数
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnreadConversation'
+          description: 各会话未读明细
+      required:
+      - conversation_count
+      - items
+      - total_unread
     ViewEnum:
       enum:
       - MONTH
@@ -10399,6 +13652,51 @@ components:
       - direction
       - transaction_no
       - transaction_type
+    WeChatLoginRequestRequest:
+      type: object
+      description: 微信开放平台 App 登录请求。
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: 微信 App SDK 返回的临时授权 code
+        state:
+          type: string
+          minLength: 1
+          description: 微信 App SDK 返回的 state，必须与发起登录时一致
+        platform:
+          allOf:
+          - $ref: '#/components/schemas/PlatformEnum'
+          description: |-
+            客户端平台，仅用于审计，不参与身份信任判断
+
+            * `IOS` - IOS
+            * `ANDROID` - ANDROID
+        referral_context:
+          allOf:
+          - $ref: '#/components/schemas/ReferralContextRequest'
+          description: 分享入口归因信息；第三方账号绑定手机号时完成归因
+      required:
+      - code
+      - platform
+      - state
+    WebSocketTicketResponse:
+      type: object
+      description: WebSocket 短时效一次性连接凭证。
+      properties:
+        ticket:
+          type: string
+          description: WebSocket URL 使用的一次性随机凭证
+        expires_at:
+          type: string
+          description: 凭证过期时间，格式 YYYY-MM-DD HH:mm:ss
+        expires_in_seconds:
+          type: integer
+          description: 凭证有效秒数
+      required:
+      - expires_at
+      - expires_in_seconds
+      - ticket
     WithdrawalCreateRequestRequest:
       type: object
       description: 服务者收入或普通用户推广收益提现申请。

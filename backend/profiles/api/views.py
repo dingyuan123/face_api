@@ -14,6 +14,7 @@ from backend.profiles.api.serializers import (
     CityOptionResponseSerializer,
     InterestTagResponseSerializer,
     ProfileResponseSerializer,
+    ProfileSharePosterResponseSerializer,
     ProfileSummaryResponseSerializer,
     ProfileUpdateRequestSerializer,
     ProfileUpdateResponseSerializer,
@@ -25,6 +26,7 @@ from backend.profiles.services import (
     profile_summary,
     update_profile,
 )
+from backend.profiles.share_services import profile_share_poster_payload
 
 
 class ProfileView(APIView):
@@ -77,6 +79,21 @@ class ProfileSummaryView(APIView):
     )
     def get(self, request: Request) -> Response:
         return Response(profile_summary(request.user))
+
+
+class ProfileSharePosterView(APIView):
+    """获取当前用户分享海报绘制数据。"""
+
+    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = [BearerTokenAuthentication]
+    permission_classes: ClassVar[list[type[BasePermission]]] = [IsAuthenticated]
+
+    @extend_schema(
+        summary="获取个人分享海报数据",
+        description="返回海报文案、个人安全资料、主视觉媒体和公开分享链接；不返回令牌或敏感身份信息。",
+        responses={200: ProfileSharePosterResponseSerializer},
+    )
+    def get(self, request: Request) -> Response:
+        return Response(profile_share_poster_payload(request.user, request._request))
 
 
 class InterestTagOptionsView(APIView):

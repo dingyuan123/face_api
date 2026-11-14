@@ -28,6 +28,8 @@ from backend.accounts.models import (
 from backend.common.crypto import encrypt_text
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
+from backend.integrations.oauth.contracts import OAuthIdentity
+from backend.referrals.services import bind_new_user_referral
 
 PHONE_PATTERN = re.compile(r"^1[3-9]\d{9}$")
 
@@ -53,6 +55,16 @@ class LoginResult:
     user_public_id: str
     is_new_user: bool
     requires_identity_selection: bool
+    requires_phone_binding: bool = False
+
+
+@dataclass(frozen=True)
+class PhoneBindingResult:
+    """手机号绑定或安全合并结果，合并后必须使用返回的新会话令牌。"""
+
+    login: LoginResult
+    already_bound: bool
+    merged: bool
 
 
 def normalize_phone(value: str) -> str:
@@ -71,6 +83,13 @@ def hash_phone(phone: str) -> str:
     """使用独立密钥计算手机号 HMAC，避免保存明文手机号。"""
     key = settings.PHONE_HASH_KEY.encode("utf-8")
     return hmac.new(key, phone.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def hash_oauth_identifier(provider: str, identifier: str) -> str:
+    """计算第三方账号标识 HMAC，数据库不保存 Apple sub 或微信 openid 明文。"""
+    key = settings.OAUTH_SUBJECT_HASH_KEY.encode("utf-8")
+    value = f"{provider}:{identifier}".encode()
+    return hmac.new(key, value, hashlib.sha256).hexdigest()
 
 
 def mask_phone(phone: str) -> str:
@@ -190,6 +209,8 @@ def login_with_code(
     phone_value: str,
     code_value: str,
     idempotency_key: str | None = None,
+    referral_context: dict[str, Any] | None = None,
+    request: Any = None,
 ) -> LoginResult:
     """校验一次性验证码并登录或自动注册用户。"""
     phone = normalize_phone(phone_value)
@@ -205,7 +226,12 @@ def login_with_code(
     effective_key = key or f"auto:{uuid.uuid4()}"
     phone_hash = hash_phone(phone)
     fingerprint = _fingerprint(
-        {"phone": phone_hash, "code": code_text, "purpose": VerificationCode.Purpose.LOGIN}
+        {
+            "phone": phone_hash,
+            "code": code_text,
+            "purpose": VerificationCode.Purpose.LOGIN,
+            "referral_context": referral_context or {},
+        }
     )
 
     verification_to_count: VerificationCode | None = None
@@ -299,6 +325,14 @@ def login_with_code(
                     ErrorCode.AUTH_ACCOUNT_NOT_ALLOWED,
                     "账号状态不允许登录",
                     status_code=403,
+                )
+            if is_new_user:
+                bind_new_user_referral(
+                    user=user,
+                    context=referral_context,
+                    registration_source="PHONE",
+                    is_new_user=True,
+                    request=request,
                 )
             user.phone_masked = mask_phone(phone)
             user.phone_encrypted = encrypt_text(phone)
@@ -402,6 +436,329 @@ def login_with_password(
         return _create_login_result(user, login_request, False)
 
 
+def login_with_oauth(
+    *,
+    identity: OAuthIdentity,
+    idempotency_key: str | None = None,
+    referral_context: dict[str, Any] | None = None,
+) -> LoginResult:
+    """使用已验证的 Apple 或微信身份登录，不存在时创建未绑定手机号用户。"""
+    provider = identity.provider.upper()
+    if provider not in {UserAuth.Type.APPLE, UserAuth.Type.WECHAT}:
+        raise ApiError(
+            ErrorCode.AUTH_OAUTH_INVALID,
+            ERROR_MESSAGES[ErrorCode.AUTH_OAUTH_INVALID],
+            status_code=400,
+        )
+    identifiers = _oauth_auth_identifiers(identity)
+    if not identifiers:
+        raise ApiError(
+            ErrorCode.AUTH_OAUTH_INVALID,
+            ERROR_MESSAGES[ErrorCode.AUTH_OAUTH_INVALID],
+            status_code=400,
+        )
+    key = _validate_idempotency_key(idempotency_key)
+    effective_key = key or f"auto:{uuid.uuid4()}"
+    fingerprint = _fingerprint(
+        {
+            "provider": provider,
+            "identifiers": identifiers,
+            "purpose": "OAUTH_LOGIN",
+            "referral_context": referral_context or {},
+        }
+    )
+    with transaction.atomic():
+        login_request, _ = LoginRequest.objects.select_for_update().get_or_create(
+            idempotency_key=effective_key,
+            defaults={
+                "request_fingerprint": fingerprint,
+                "phone_hash": None,
+                "phone_masked": "",
+            },
+        )
+        if login_request.request_fingerprint != fingerprint:
+            raise ApiError(
+                ErrorCode.AUTH_IDEMPOTENCY_CONFLICT,
+                ERROR_MESSAGES[ErrorCode.AUTH_IDEMPOTENCY_CONFLICT],
+                status_code=409,
+            )
+        if login_request.completed_at:
+            return _login_result_from_request(login_request)
+
+        auth = (
+            UserAuth.objects.select_for_update()
+            .filter(auth_type=provider, auth_identifier__in=identifiers)
+            .select_related("user")
+            .first()
+        )
+        is_new_user = auth is None
+        if auth is None:
+            user = User.objects.create(phone_hash=None, phone_masked="")
+            for auth_identifier in identifiers:
+                UserAuth.objects.create(
+                    user=user,
+                    auth_type=provider,
+                    auth_identifier=auth_identifier,
+                )
+        else:
+            user = auth.user
+            existing_identifiers = set(
+                UserAuth.objects.filter(user=user, auth_type=provider).values_list(
+                    "auth_identifier", flat=True
+                )
+            )
+            for auth_identifier in identifiers:
+                if auth_identifier not in existing_identifiers:
+                    UserAuth.objects.get_or_create(
+                        auth_type=provider,
+                        auth_identifier=auth_identifier,
+                        defaults={"user": user},
+                    )
+        if user.status != User.Status.ACTIVE:
+            raise ApiError(
+                ErrorCode.AUTH_ACCOUNT_NOT_ALLOWED,
+                ERROR_MESSAGES[ErrorCode.AUTH_ACCOUNT_NOT_ALLOWED],
+                status_code=403,
+            )
+        user.last_login_at = timezone.now()
+        user.save(update_fields=["last_login_at", "updated_at"])
+        login_request.user = user
+        login_request.is_new_user = is_new_user
+        login_request.completed_at = timezone.now()
+        login_request.save(update_fields=["user", "is_new_user", "completed_at"])
+        return _create_login_result(user, login_request, is_new_user)
+
+
+def bind_phone_to_account(
+    *,
+    user: User,
+    phone_value: str,
+    code_value: str,
+    idempotency_key: str | None = None,
+    referral_context: dict[str, Any] | None = None,
+    request: Any = None,
+) -> PhoneBindingResult:
+    """验证手机号并将第三方账号绑定到新手机号或安全合并到空闲手机号账号。"""
+    phone = normalize_phone(phone_value)
+    phone_hash = hash_phone(phone)
+    code_text = str(code_value).strip()
+    if not re.fullmatch(r"\d{6}", code_text):
+        raise ApiError(
+            ErrorCode.AUTH_CODE_INVALID,
+            ERROR_MESSAGES[ErrorCode.AUTH_CODE_INVALID],
+            status_code=400,
+        )
+    key = _validate_idempotency_key(idempotency_key)
+    effective_key = key or f"auto:{uuid.uuid4()}"
+    was_unbound = user.phone_hash is None
+    fingerprint = _fingerprint(
+        {
+            "user_public_id": str(user.public_id),
+            "phone_hash": phone_hash,
+            "code": code_text,
+            "purpose": "PHONE_BINDING",
+            "referral_context": referral_context or {},
+        }
+    )
+    verification_to_count: VerificationCode | None = None
+    try:
+        with transaction.atomic():
+            login_request, _ = LoginRequest.objects.select_for_update().get_or_create(
+                idempotency_key=effective_key,
+                defaults={
+                    "request_fingerprint": fingerprint,
+                    "phone_hash": phone_hash,
+                    "phone_masked": mask_phone(phone),
+                },
+            )
+            if login_request.request_fingerprint != fingerprint:
+                raise ApiError(
+                    ErrorCode.AUTH_IDEMPOTENCY_CONFLICT,
+                    ERROR_MESSAGES[ErrorCode.AUTH_IDEMPOTENCY_CONFLICT],
+                    status_code=409,
+                )
+            if login_request.completed_at:
+                return PhoneBindingResult(
+                    login=_login_result_from_request(login_request),
+                    already_bound=True,
+                    merged=False,
+                )
+            if user.phone_hash == phone_hash:
+                _save_bound_phone(user, phone)
+                login_request.user = user
+                login_request.completed_at = timezone.now()
+                login_request.save(update_fields=["user", "completed_at"])
+                return PhoneBindingResult(
+                    login=_create_login_result(user, login_request, False),
+                    already_bound=True,
+                    merged=False,
+                )
+            if user.phone_hash is not None:
+                raise ApiError(
+                    ErrorCode.AUTH_PHONE_ALREADY_BOUND,
+                    ERROR_MESSAGES[ErrorCode.AUTH_PHONE_ALREADY_BOUND],
+                    status_code=409,
+                )
+
+            verification = (
+                VerificationCode.objects.select_for_update()
+                .filter(phone_hash=phone_hash, purpose=VerificationCode.Purpose.LOGIN)
+                .order_by("-created_at")
+                .first()
+            )
+            if verification is None:
+                raise ApiError(
+                    ErrorCode.AUTH_CODE_INVALID,
+                    ERROR_MESSAGES[ErrorCode.AUTH_CODE_INVALID],
+                    status_code=400,
+                )
+            if verification.consumed_at is not None:
+                raise ApiError(
+                    ErrorCode.AUTH_CODE_CONSUMED,
+                    ERROR_MESSAGES[ErrorCode.AUTH_CODE_CONSUMED],
+                    status_code=409,
+                )
+            if verification.expires_at <= timezone.now():
+                raise ApiError(
+                    ErrorCode.AUTH_CODE_EXPIRED,
+                    ERROR_MESSAGES[ErrorCode.AUTH_CODE_EXPIRED],
+                    status_code=400,
+                )
+            if verification.attempts >= verification.max_attempts:
+                raise ApiError(
+                    ErrorCode.AUTH_CODE_ATTEMPTS_EXCEEDED,
+                    ERROR_MESSAGES[ErrorCode.AUTH_CODE_ATTEMPTS_EXCEEDED],
+                    status_code=423,
+                )
+            if not check_password(code_text, verification.code_hash):
+                verification_to_count = verification
+                raise ApiError(
+                    ErrorCode.AUTH_CODE_INVALID,
+                    ERROR_MESSAGES[ErrorCode.AUTH_CODE_INVALID],
+                    status_code=400,
+                )
+            verification.consumed_at = timezone.now()
+            verification.save(update_fields=["consumed_at"])
+
+            phone_auth = (
+                UserAuth.objects.select_for_update()
+                .filter(auth_type=UserAuth.Type.PHONE, auth_identifier=phone_hash)
+                .select_related("user")
+                .first()
+            )
+            if phone_auth is None:
+                _save_bound_phone(user, phone)
+                UserAuth.objects.get_or_create(
+                    auth_type=UserAuth.Type.PHONE,
+                    auth_identifier=phone_hash,
+                    defaults={"user": user},
+                )
+                target_user = user
+                merged = False
+                if was_unbound:
+                    bind_new_user_referral(
+                        user=target_user,
+                        context=referral_context,
+                        registration_source="WECHAT"
+                        if any(
+                            auth.auth_type == UserAuth.Type.WECHAT
+                            for auth in UserAuth.objects.filter(user=target_user)
+                        )
+                        else "APPLE",
+                        is_new_user=True,
+                        request=request,
+                    )
+            else:
+                target_user = phone_auth.user
+                if target_user.status != User.Status.ACTIVE:
+                    raise ApiError(
+                        ErrorCode.AUTH_ACCOUNT_NOT_ALLOWED,
+                        ERROR_MESSAGES[ErrorCode.AUTH_ACCOUNT_NOT_ALLOWED],
+                        status_code=403,
+                    )
+                if _has_external_auth(target_user):
+                    raise ApiError(
+                        ErrorCode.AUTH_ACCOUNT_ALREADY_BOUND,
+                        ERROR_MESSAGES[ErrorCode.AUTH_ACCOUNT_ALREADY_BOUND],
+                        status_code=409,
+                    )
+                if _has_business_data(user):
+                    raise ApiError(
+                        ErrorCode.AUTH_ACCOUNT_MERGE_CONFLICT,
+                        ERROR_MESSAGES[ErrorCode.AUTH_ACCOUNT_MERGE_CONFLICT],
+                        status_code=409,
+                    )
+                UserAuth.objects.filter(user=user).update(user=target_user)
+                AuthToken.objects.filter(user=user).update(
+                    revoked_at=timezone.now(),
+                )
+                user.status = User.Status.LOGOFF
+                user.save(update_fields=["status", "updated_at"])
+                target_user.last_login_at = timezone.now()
+                target_user.save(update_fields=["last_login_at", "updated_at"])
+                merged = True
+
+            login_request.user = target_user
+            login_request.is_new_user = False
+            login_request.completed_at = timezone.now()
+            login_request.save(update_fields=["user", "is_new_user", "completed_at"])
+            return PhoneBindingResult(
+                login=_create_login_result(target_user, login_request, False),
+                already_bound=False,
+                merged=merged,
+            )
+    except ApiError:
+        if verification_to_count is not None:
+            VerificationCode.objects.filter(pk=verification_to_count.pk).update(
+                attempts=F("attempts") + 1
+            )
+        raise
+
+
+def _oauth_auth_identifiers(identity: OAuthIdentity) -> list[str]:
+    """返回第三方账号的去重 HMAC 映射键，微信优先保留 unionid 和 openid 两个映射。"""
+    provider = identity.provider.upper()
+    raw_identifiers: list[str] = []
+    if provider == UserAuth.Type.APPLE:
+        raw_identifiers.append(f"sub:{identity.subject}")
+    elif provider == UserAuth.Type.WECHAT:
+        if identity.union_id:
+            raw_identifiers.append(f"union:{identity.union_id}")
+        if identity.open_id:
+            raw_identifiers.append(f"openid:{identity.open_id}")
+    return list(
+        dict.fromkeys(
+            hash_oauth_identifier(provider, raw_identifier)
+            for raw_identifier in raw_identifiers
+            if raw_identifier
+        )
+    )
+
+
+def _save_bound_phone(user: User, phone: str) -> None:
+    """保存手机号密文和脱敏展示值，不保存明文手机号。"""
+    user.phone_hash = hash_phone(phone)
+    user.phone_masked = mask_phone(phone)
+    user.phone_encrypted = encrypt_text(phone)
+    user.save(update_fields=["phone_hash", "phone_masked", "phone_encrypted", "updated_at"])
+
+
+def _has_external_auth(user: User) -> bool:
+    """判断手机号账号是否已经绑定微信或 Apple，避免覆盖已有第三方账号。"""
+    return user.auths.filter(auth_type__in=[UserAuth.Type.WECHAT, UserAuth.Type.APPLE]).exists()
+
+
+def _has_business_data(user: User) -> bool:
+    """只允许自动合并尚未产生跨模块业务数据的空账号，避免数据归属被隐式转移。"""
+    for relation in User._meta.related_objects:
+        model = relation.related_model
+        if model._meta.app_label == "accounts":
+            continue
+        if model._base_manager.filter(**{relation.field.name: user}).exists():
+            return True
+    return False
+
+
 def _create_login_result(user: User, login_request: LoginRequest, is_new_user: bool) -> LoginResult:
     access_raw, access_token = _create_token(
         user=user,
@@ -423,6 +780,7 @@ def _create_login_result(user: User, login_request: LoginRequest, is_new_user: b
         user_public_id=str(user.public_id),
         is_new_user=is_new_user,
         requires_identity_selection=not user.initial_role_selected,
+        requires_phone_binding=user.phone_hash is None,
     )
 
 
@@ -442,6 +800,7 @@ def _login_result_from_request(login_request: LoginRequest) -> LoginResult:
         user_public_id=str(login_request.user.public_id),
         is_new_user=bool(login_request.is_new_user),
         requires_identity_selection=not login_request.user.initial_role_selected,
+        requires_phone_binding=login_request.user.phone_hash is None,
     )
 
 
@@ -484,6 +843,7 @@ def _token_result(access: AuthToken, refresh: AuthToken) -> LoginResult:
         user_public_id=str(access.user.public_id),
         is_new_user=False,
         requires_identity_selection=not access.user.initial_role_selected,
+        requires_phone_binding=access.user.phone_hash is None,
     )
 
 
@@ -572,7 +932,11 @@ def session_payload(user: User) -> dict[str, Any]:
         "phone_masked": user.phone_masked,
         "status": user.status,
         "requires_identity_selection": not user.initial_role_selected,
+        "requires_phone_binding": user.phone_hash is None,
+        "auth_methods": sorted(user.auths.values_list("auth_type", flat=True).distinct()),
         "primary_role": user.primary_role,
+        "current_role": _current_role(user),
+        "roles": _user_roles(user),
         "default_workspace": user.default_workspace,
         "provider_status": user.provider_status,
     }
@@ -591,7 +955,7 @@ def select_initial_role(user: User, role: str) -> dict[str, Any]:
     with transaction.atomic():
         current = User.objects.select_for_update().get(pk=user.pk)
         if current.initial_role_selected:
-            if current.primary_role != normalized_role:
+            if (current.initial_role or current.primary_role) != normalized_role:
                 raise ApiError(
                     ErrorCode.USER_INITIAL_ROLE_CONFLICT,
                     ERROR_MESSAGES[ErrorCode.USER_INITIAL_ROLE_CONFLICT],
@@ -599,6 +963,7 @@ def select_initial_role(user: User, role: str) -> dict[str, Any]:
                 )
             return initial_role_payload(current)
 
+        current.initial_role = normalized_role
         current.primary_role = normalized_role
         current.initial_role_selected = True
         current.initial_role_selected_at = timezone.now()
@@ -611,6 +976,7 @@ def select_initial_role(user: User, role: str) -> dict[str, Any]:
             current.provider_status = User.ProviderStatus.NOT_SUBMITTED
         current.save(
             update_fields=[
+                "initial_role",
                 "primary_role",
                 "initial_role_selected",
                 "initial_role_selected_at",
@@ -626,8 +992,25 @@ def initial_role_payload(user: User) -> dict[str, Any]:
     """返回身份选择和后续页面路由状态。"""
     return {
         "primary_role": user.primary_role,
+        "current_role": _current_role(user),
+        "roles": _user_roles(user),
         "default_workspace": user.default_workspace,
         "next_route": user.default_workspace,
         "requires_identity_selection": not user.initial_role_selected,
         "provider_status": user.provider_status,
     }
+
+
+def _current_role(user: User) -> str:
+    """返回当前客户端应使用的主身份。"""
+
+    return user.primary_role or User.InitialRole.USER
+
+
+def _user_roles(user: User) -> list[str]:
+    """返回用户当前可用身份，普通用户始终保留，服务者通过后追加。"""
+
+    roles = [User.InitialRole.USER]
+    if user.provider_enabled and user.provider_status == User.ProviderStatus.APPROVED:
+        roles.append(User.InitialRole.PROVIDER)
+    return roles

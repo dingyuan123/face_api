@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FFF7F3">
+<title>见面聊 · 破冰邀请</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    background: #FFF7F3;
+    color: #1F1A17;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .wrap { width: 100%; max-width: 520px; margin: 0 auto; padding: 0 22px; }
+
+  /* 顶部品牌 */
+  .brand { display: flex; align-items: center; gap: 10px; padding: 22px 0 6px; }
+  .brand img { width: 40px; height: 40px; }
+  .brand-name { font-size: 18px; font-weight: 800; }
+  .brand-sub { margin-left: auto; font-size: 12px; color: #9A8E88; }
+
+  /* 主视觉 */
+  .hero { padding: 18px 0 6px; }
+  .hero h1 { font-size: 34px; line-height: 1.25; font-weight: 800; letter-spacing: 1px; }
+  .hero h1 .hl { color: #FD5A6B; }
+  .hero p { margin-top: 12px; font-size: 15px; color: #6E625C; }
+
+  /* 邀请卡 */
+  .invite-card {
+    margin-top: 18px;
+    background: #FFF9F0;
+    border-radius: 22px;
+    padding: 20px 20px 22px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .invite-card::before {
+    content: "";
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 6px; background: linear-gradient(180deg, #FD5A6B, #FCAE59);
+  }
+  .invite-tag { display: inline-block; font-size: 12px; color: #E2596B; background: #FFE3DC; border-radius: 999px; padding: 5px 12px; }
+  .invite-line { margin-top: 12px; font-size: 17px; font-weight: 700; }
+  .invite-line .code { color: #FD5A6B; font-family: ui-monospace, monospace; }
+  .invite-tip { margin-top: 8px; font-size: 13px; color: #8D817B; line-height: 1.7; }
+
+  /* 权益点 */
+  .points { margin-top: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .point { display: flex; align-items: center; gap: 12px; background: #FFFFFF; border-radius: 16px; padding: 14px 16px; border: 1px solid #F5DED5; }
+  .point-ic { width: 38px; height: 38px; border-radius: 12px; background: #FFE9E4; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .point-t { font-size: 15px; font-weight: 700; }
+  .point-d { margin-top: 2px; font-size: 12px; color: #9A8E88; }
+
+  /* 注册表单 */
+  .form-card { margin-top: 20px; background: #FFFFFF; border: 1px solid #F5DED5; border-radius: 22px; padding: 20px 18px; }
+  .form-title { font-size: 18px; font-weight: 800; }
+  .form-sub { margin-top: 6px; font-size: 13px; color: #8D817B; }
+  .field { margin-top: 14px; display: flex; align-items: center; background: #FFF7F3; border-radius: 14px; padding: 0 14px; height: 52px; }
+  .field input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 16px; color: #1F1A17; height: 100%; }
+  .field input::placeholder { color: #BEB2AC; }
+  .code-btn { border: 0; background: none; color: #FD5A6B; font-size: 14px; font-weight: 700; padding: 8px 4px; white-space: nowrap; }
+  .code-btn[disabled] { color: #BEB2AC; }
+  .submit-btn {
+    margin-top: 18px; width: 100%; height: 54px; border: 0; border-radius: 27px;
+    background: linear-gradient(90deg, #FD5A6B, #FCAE59);
+    color: #fff; font-size: 17px; font-weight: 800; letter-spacing: 2px;
+  }
+  .submit-btn[disabled] { opacity: .6; }
+  .agree { margin-top: 12px; font-size: 11px; color: #B7A9A1; text-align: center; line-height: 1.8; }
+  .agree a { color: #E2596B; text-decoration: none; }
+  .toast { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); background: rgba(31,26,23,.86); color: #fff; font-size: 14px; padding: 11px 18px; border-radius: 12px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 99; max-width: 82vw; text-align: center; }
+  .toast.show { opacity: 1; }
+
+  /* 下载区 */
+  .download-card { margin-top: 20px; margin-bottom: 30px; background: #FFFFFF; border: 1px solid #F5DED5; border-radius: 22px; padding: 22px 18px; text-align: center; }
+  .download-title { font-size: 17px; font-weight: 800; }
+  .download-sub { margin-top: 6px; font-size: 13px; color: #8D817B; }
+  .download-btn {
+    margin-top: 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-width: 220px; height: 52px; border-radius: 26px; border: 0;
+    background: #1F1A17; color: #fff; font-size: 16px; font-weight: 700;
+    text-decoration: none; padding: 0 26px;
+  }
+  .open-app { margin-top: 12px; display: inline-block; font-size: 13px; color: #E2596B; text-decoration: none; }
+  .footer { padding: 4px 0 26px; text-align: center; font-size: 11px; color: #B7A9A1; }
+  .footer a { color: #B7A9A1; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <img src="/static/brand/app-logo.png" alt="FaceTo" onerror="this.style.display='none'">
+      <div class="brand-name">FaceTo · 见面聊</div>
+      <div class="brand-sub">你的见面破冰者</div>
+    </div>
+
+    <div class="hero">
+      <h1>想见面，<br><span class="hl">却怕没话聊？</span></h1>
+      <p>让共同兴趣，成为第一句开场白。</p>
+    </div>
+
+    <div class="invite-card">
+      <span class="invite-tag" id="inviteTag">好友邀请</span>
+      <div class="invite-line">你的朋友邀请你加入见面聊<span class="code" id="inviteCode"></span></div>
+      <div class="invite-tip">注册后你们将建立邀请关系 · 先聊兴趣，再约公共场所见面。<br>实名认证 · 平台担保交易 · 见面更安心。</div>
+    </div>
+
+    <div class="points">
+      <div class="point">
+        <div class="point-ic">💬</div>
+        <div><div class="point-t">破冰话题，见面不怕冷场</div><div class="point-d">从共同兴趣开始，第一句不用绞尽脑汁</div></div>
+      </div>
+      <div class="point">
+        <div class="point-ic">🛡️</div>
+        <div><div class="point-t">实名认证 · 安心见面</div><div class="point-d">优先选择公共场所，见面更安全</div></div>
+      </div>
+      <div class="point">
+        <div class="point-ic">🎁</div>
+        <div><div class="point-t">注册即绑定邀请关系</div><div class="point-d">后续活动奖励将自动同步给你的邀请人</div></div>
+      </div>
+    </div>
+
+    <div class="form-card" id="formCard">
+      <div class="form-title">手机号注册 / 登录</div>
+      <div class="form-sub">未注册的手机号验证后将自动创建账号</div>
+      <div class="field">
+        <input id="phone" type="tel" maxlength="11" placeholder="请输入手机号">
+      </div>
+      <div class="field">
+        <input id="code" type="tel" maxlength="6" placeholder="请输入验证码">
+        <button class="code-btn" id="codeBtn">获取验证码</button>
+      </div>
+      <button class="submit-btn" id="submitBtn">注册并加入</button>
+      <div class="agree">注册即代表同意 <a href="/terms" target="_blank">《用户服务协议》</a> 和 <a href="/privacy" target="_blank">《用户隐私协议》</a></div>
+    </div>
+
+    <div class="download-card">
+      <div class="download-title">下载见面聊 App</div>
+      <div class="download-sub" id="downloadSub">已为你匹配合适的下载方式</div>
+      <a class="download-btn" id="downloadBtn" href="javascript:void(0)">下载 App</a>
+      <div><a class="open-app" id="openApp" href="javascript:void(0)">已安装 App？点此直接打开 →</a></div>
+    </div>
+
+    <div class="footer">FaceTo · 见面聊，安心见 · <a href="/terms">用户协议</a> · <a href="/privacy">隐私政策</a></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  // ================= 配置区（部署时按需修改） =================
+  var API_BASE = "";                       // 与页面同域部署时留空；跨域部署填 https://dev.vibeapi.top
+  var APP_SCHEME = "faceto://invite";      // App 唤起协议（需 App 侧配置 URL Scheme 后生效）
+  var DOWNLOADS = {
+    ios: "",                               // App Store 链接（如 https://apps.apple.com/cn/app/idXXXX）
+    androidDefault: "",                    // Android 默认下载（官网 APK / 应用宝）
+    androidByBrand: {
+      huawei: "",                          // 华为应用市场
+      honor: "",
+      xiaomi: "",                          // 小米应用商店
+      oppo: "",
+      vivo: "",
+      meizu: ""
+    }
+  };
+
+  // ================= 归因参数 =================
+  var params = new URLSearchParams(location.search);
+  var inviteCode = params.get("invite_code") || "";
+  var shareNo = params.get("share_no") || params.get("share_id") || "";
+  var channel = params.get("channel") || "";
+  var campaignCode = params.get("campaign_code") || "";
+  if (inviteCode) {
+    document.getElementById("inviteCode").textContent = "（邀请码 " + inviteCode + "）";
+    document.getElementById("inviteTag").textContent = "好友邀请 · " + inviteCode;
+  }
+
+  // 匿名访问标识（服务端只存摘要）
+  var visitorId = "";
+  try {
+    visitorId = localStorage.getItem("faceto.visitor.id") || "";
+    if (!visitorId) {
+      visitorId = "v-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem("faceto.visitor.id", visitorId);
+    }
+  } catch (e) {}
+
+  // 暂存归因（注册成功前保持）
+  var referralContext = function () {
+    return {
+      invite_code: inviteCode,
+      share_no: shareNo,
+      channel: channel,
+      campaign_code: campaignCode,
+      visitor_id: visitorId
+    };
+  };
+
+  // ================= 工具 =================
+  var toastEl = document.getElementById("toast");
+  var toastTimer = 0;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2600);
+  }
+  function post(path, body) {
+    return fetch(API_BASE + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    }).then(function (res) { return res.json().catch(function () { return {}; }); });
+  }
+
+  // ================= 记录访问（匿名归因） =================
+  if (shareNo || inviteCode) {
+    post("/api/v1/referrals/visits/", referralContext()).catch(function () {});
+  }
+
+  // ================= 验证码 =================
+  var codeBtn = document.getElementById("codeBtn");
+  var counting = false;
+  codeBtn.addEventListener("click", function () {
+    if (counting) return;
+    var phone = document.getElementById("phone").value.trim();
+    if (!/^1\d{10}$/.test(phone)) { toast("请输入正确的手机号"); return; }
+    counting = true;
+    codeBtn.disabled = true;
+    post("/api/v1/auth/sms-code/", { phone: phone }).then(function (data) {
+      if (data && data.code === 0) {
+        toast("验证码已发送");
+        var n = 60;
+        codeBtn.textContent = n + "s";
+        var t = setInterval(function () {
+          n -= 1;
+          codeBtn.textContent = n + "s";
+          if (n <= 0) { clearInterval(t); codeBtn.disabled = false; codeBtn.textContent = "获取验证码"; counting = false; }
+        }, 1000);
+      } else {
+        toast((data && data.message) || "验证码发送失败");
+        codeBtn.disabled = false;
+        counting = false;
+      }
+    }).catch(function () {
+      toast("网络异常，请稍后重试");
+      codeBtn.disabled = false;
+      counting = false;
+    });
+  });
+
+  // ================= 注册 / 登录（携带邀请归因） =================
+  var submitBtn = document.getElementById("submitBtn");
+  submitBtn.addEventListener("click", function () {
+    var phone = document.getElementById("phone").value.trim();
+    var code = document.getElementById("code").value.trim();
+    if (!/^1\d{10}$/.test(phone)) { toast("请输入正确的手机号"); return; }
+    if (code.length < 4) { toast("请输入验证码"); return; }
+    submitBtn.disabled = true;
+    submitBtn.textContent = "正在提交...";
+    var body = { phone: phone, code: code };
+    var ctx = referralContext();
+    if (ctx.invite_code || ctx.share_no) {
+      body.referral_context = ctx;
+    }
+    post("/api/v1/auth/login/", body).then(function (data) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "注册并加入";
+      if (data && data.code === 0) {
+        toast("注册成功，邀请关系已建立");
+        document.getElementById("formCard").innerHTML =
+          '<div class="form-title">🎉 注册成功</div>' +
+          '<div class="form-sub">邀请关系已绑定，下载 App 开始体验吧</div>';
+        window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+      } else {
+        toast((data && data.message) || "提交失败，请稍后重试");
+      }
+    }).catch(function () {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "注册并加入";
+      toast("网络异常，请稍后重试");
+    });
+  });
+
+  // ================= 机型识别与下载跳转 =================
+  function detectPlatform() {
+    var ua = navigator.userAgent || "";
+    if (/iPhone|iPad|iPod/i.test(ua)) return { os: "ios" };
+    if (/Android/i.test(ua)) {
+      var brand = "";
+      if (/Huawei/i.test(ua)) brand = "huawei";
+      else if (/HONOR|Honor/i.test(ua)) brand = "honor";
+      else if (/MI\s|Xiaomi|Redmi/i.test(ua)) brand = "xiaomi";
+      else if (/OPPO|PCLM10|PBAM/i.test(ua)) brand = "oppo";
+      else if (/vivo/i.test(ua)) brand = "vivo";
+      else if (/Meizu/i.test(ua)) brand = "meizu";
+      return { os: "android", brand: brand };
+    }
+    return { os: "other" };
+  }
+
+  function downloadUrl() {
+    var p = detectPlatform();
+    if (p.os === "ios") return DOWNLOADS.ios;
+    if (p.os === "android") {
+      return (p.brand && DOWNLOADS.androidByBrand[p.brand]) || DOWNLOADS.androidDefault;
+    }
+    return DOWNLOADS.androidDefault || DOWNLOADS.ios;
+  }
+
+  var downloadBtn = document.getElementById("downloadBtn");
+  var downloadSub = document.getElementById("downloadSub");
+  var p = detectPlatform();
+  if (p.os === "ios") {
+    downloadSub.textContent = "iPhone 用户：前往 App Store 下载";
+    downloadBtn.textContent = "前往 App Store";
+  } else if (p.os === "android") {
+    downloadSub.textContent = p.brand ? "已识别你的机型，为你匹配对应应用市场" : "Android 用户：下载安装见面聊";
+    downloadBtn.textContent = "下载 Android 版";
+  } else {
+    downloadSub.textContent = "请用手机打开本页面，或复制链接到手机浏览器";
+    downloadBtn.textContent = "获取下载链接";
+  }
+
+  downloadBtn.addEventListener("click", function () {
+    var url = downloadUrl();
+    if (url) {
+      location.href = url;
+    } else {
+      toast("下载地址即将开放，敬请期待");
+    }
+  });
+
+  // ================= 唤起已安装的 App（深链） =================
+  var openApp = document.getElementById("openApp");
+  openApp.addEventListener("click", function () {
+    var url = APP_SCHEME + "?invite_code=" + encodeURIComponent(inviteCode) +
+      "&share_no=" + encodeURIComponent(shareNo) + "&channel=" + encodeURIComponent(channel);
+    location.href = url;
+    setTimeout(function () {
+      toast("未安装 App？点击下方按钮下载");
+    }, 1600);
+  });
+})();
+</script>
+</body>
+</html>

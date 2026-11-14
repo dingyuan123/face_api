@@ -3,8 +3,10 @@ from __future__ import annotations
 import uuid
 from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 
 import pytest
+from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -15,7 +17,10 @@ from backend.catalog.models import ProviderService, ServiceCategory
 from backend.common.crypto import encrypt_text
 from backend.common.errors import ErrorCode
 from backend.common.exceptions import ApiError
+from backend.locations.services import build_location_selection_token
 from backend.media.models import MediaAsset
+from backend.messaging.models import Conversation, Message
+from backend.messaging.services import ensure_order_paid_conversation
 from backend.orders.models import Order, OrderScheduleSlot
 from backend.orders.services import (
     cancel_order,
@@ -178,6 +183,21 @@ def test_booking_order_can_be_paid_completed_and_reviewed() -> None:
         rating_sum=173,
         rating_average=Decimal("4.80"),
     )
+    location_token, _ = build_location_selection_token(
+        {
+            "provider_poi_id": "booking-public-poi",
+            "name": "市民运动中心",
+            "address": "公共运动路 88 号",
+            "province": "四川省",
+            "city": "泸州市",
+            "district": "江阳区",
+            "category_code": "PUBLIC_SPORTS",
+            "category_name": "运动场馆",
+            "latitude": 28.871,
+            "longitude": 105.442,
+            "coordinate_system": "GCJ02",
+        }
+    )
     created = create_order(
         user=customer,
         service_id=str(service.public_id),
@@ -185,8 +205,12 @@ def test_booking_order_can_be_paid_completed_and_reviewed() -> None:
         note="第一次见面",
         expected_service_version=service.version,
         expected_slot_version=slot.version,
+        location_selection_token=location_token,
         idempotency_key="order-1",
     )
+    assert created.order.meeting_location_name == "市民运动中心"
+    assert created.order.meeting_location_address == "公共运动路 88 号"
+    assert float(created.order.meeting_location_latitude) == pytest.approx(28.871)
     slot.refresh_from_db()
     assert slot.status == ScheduleSlot.Status.LOCKED
     assert slot.last_booking_status == ScheduleSlot.LastBookingStatus.LOCKED
@@ -318,6 +342,78 @@ def test_booking_order_can_be_paid_completed_and_reviewed() -> None:
     assert me_summary.json()["data"]["order_count"] == 1
     assert me_summary.json()["data"]["favorite_count"] == 1
     assert me_summary.json()["data"]["following_count"] == 1
+
+
+def test_paid_order_creates_shared_system_conversation() -> None:
+    """支付成功后双方会话列表均出现订单，并收到同一条幂等系统提示。"""
+
+    provider, service, slot = create_provider_fixture("paid-chat-provider")
+    admin = create_user("paid-chat-admin", is_staff=True)
+    customer = create_customer("paid-chat-customer", admin)
+    created = create_order(
+        user=customer,
+        service_id=str(service.public_id),
+        slot_id=str(slot.public_id),
+        note="支付后开启聊天",
+        expected_service_version=service.version,
+        expected_slot_version=slot.version,
+        idempotency_key="paid-chat-order",
+    )
+    client = APIClient()
+
+    unpaid_customer_list = client.get(
+        reverse("v1:conversation-list"),
+        **auth_headers(customer),
+    )
+    unpaid_provider_list = client.get(
+        reverse("v1:conversation-list"),
+        **auth_headers(provider),
+    )
+    assert unpaid_customer_list.json()["data"]["items"] == []
+    assert unpaid_provider_list.json()["data"]["items"] == []
+
+    paid = pay_order(
+        user=customer,
+        order_no=str(created.order.order_no),
+        expected_version=created.order.version,
+        idempotency_key="paid-chat-payment",
+    )
+    first_activation = ensure_order_paid_conversation(order_no=str(created.order.order_no))
+    second_activation = ensure_order_paid_conversation(order_no=str(created.order.order_no))
+    command_output = StringIO()
+    call_command(
+        "backfill_paid_order_conversations",
+        stdout=command_output,
+    )
+
+    assert paid["order"]["status"] == "PENDING_ACCEPT"
+    assert Conversation.objects.filter(order=created.order).count() == 1
+    assert (
+        Message.objects.filter(
+            conversation__order=created.order,
+            sender__isnull=True,
+            message_type=Message.MessageType.SYSTEM,
+        ).count()
+        == 1
+    )
+    assert first_activation["reused"] is True
+    assert second_activation["reused"] is True
+    assert "已支付订单 1 笔" in command_output.getvalue()
+
+    for user in (customer, provider):
+        response = client.get(
+            reverse("v1:conversation-list"),
+            **auth_headers(user),
+        )
+        items = response.json()["data"]["items"]
+        assert response.status_code == 200
+        assert len(items) == 1
+        assert items[0]["order"]["order_no"] == str(created.order.order_no)
+        assert items[0]["last_message"]["message_type"] == "SYSTEM"
+        assert items[0]["last_message"]["content"] == (
+            "订单支付成功，现在可以联系对方沟通服务安排。"
+        )
+        assert items[0]["unread_count"] == 1
 
 
 def test_order_reject_refunds_wallet_and_releases_slot() -> None:

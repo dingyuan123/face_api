@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from django.conf import settings
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser
@@ -20,6 +21,7 @@ from backend.discovery.api.serializers import (
     AdminTrendingUpdateResponseSerializer,
     AdminTrendingUpdateSerializer,
     HomeFeedItemSerializer,
+    HomeFeedLocationRequestSerializer,
     SearchMomentListResponseSerializer,
     SearchNewsListResponseSerializer,
     SearchProviderListResponseSerializer,
@@ -39,6 +41,7 @@ from backend.discovery.trending_services import (
     list_trending_keywords,
     update_manual_trending_keyword,
 )
+from backend.integrations.geo.coordinates import wgs84_to_gcj02
 
 
 class HomeFeedCursorPagination(ApiCursorPagination):
@@ -86,8 +89,6 @@ class HomeFeedView(APIView):
         responses={200: HomeFeedItemSerializer(many=True)},
     )
     def get(self, request: Request) -> Response:
-        from django.conf import settings
-
         max_limit = (
             settings.HOME_FEED_AUTHENTICATED_LIMIT
             if request.user.is_authenticated
@@ -117,6 +118,66 @@ class HomeFeedView(APIView):
         )
         page = paginator.paginate_queryset(queryset, request, view=self)
         return paginator.get_paginated_response(home_feed_payloads(page or [], request))
+
+    @extend_schema(
+        summary="按浏览者当前位置获取首页服务者卡片",
+        operation_id="listHomeFeedWithLocation",
+        request=HomeFeedLocationRequestSerializer,
+        responses={200: HomeFeedItemSerializer(many=True)},
+        description=(
+            "浏览者坐标只用于本次请求计算距离，不写入普通用户位置表；"
+            "服务者位置使用其登录时更新的加密位置状态。"
+        ),
+    )
+    def post(self, request: Request) -> Response:
+        serializer = HomeFeedLocationRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+        latitude = payload.get("latitude")
+        longitude = payload.get("longitude")
+        if (latitude is None) != (longitude is None):
+            raise ApiError(
+                ErrorCode.HOME_FEED_INVALID,
+                ERROR_MESSAGES[ErrorCode.HOME_FEED_INVALID],
+                status_code=400,
+                details={"location": "latitude 和 longitude 必须同时提供"},
+            )
+        viewer_coordinates = None
+        if latitude is not None and longitude is not None:
+            if not request.user.is_authenticated:
+                raise ApiError(
+                    ErrorCode.AUTHENTICATION_REQUIRED,
+                    ERROR_MESSAGES[ErrorCode.AUTHENTICATION_REQUIRED],
+                    status_code=401,
+                )
+            if payload.get("coordinate_system", "GCJ02") == "WGS84":
+                viewer_coordinates = wgs84_to_gcj02(latitude, longitude)
+            else:
+                viewer_coordinates = (latitude, longitude)
+        max_limit = (
+            settings.HOME_FEED_AUTHENTICATED_LIMIT
+            if request.user.is_authenticated
+            else settings.HOME_FEED_GUEST_LIMIT
+        )
+        requested_limit = payload.get("limit")
+        if requested_limit is not None and requested_limit > max_limit:
+            raise ApiError(
+                ErrorCode.HOME_FEED_INVALID,
+                ERROR_MESSAGES[ErrorCode.HOME_FEED_INVALID],
+                status_code=400,
+                details={"limit": f"不能超过 {max_limit}"},
+            )
+        paginator = self.pagination_class()
+        paginator.page_size = max_limit
+        queryset = home_feed_queryset(
+            city_code=payload.get("city_code", settings.PROFILE_DEFAULT_CITY_CODE),
+            category_code=payload.get("category_code"),
+            sort=payload.get("sort", "RECOMMENDED"),
+        )
+        page = paginator.paginate_queryset(queryset, request, view=self)
+        return paginator.get_paginated_response(
+            home_feed_payloads(page or [], request, viewer_coordinates=viewer_coordinates)
+        )
 
 
 def _integer_query(

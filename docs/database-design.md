@@ -125,7 +125,7 @@
 
 - `order_no/payment_no/refund_no/transaction_no/reward_no/withdrawal_no` 唯一。
 - `paid_amount >= 0`、`refunded_amount >= 0`、`refunded_amount <= paid_amount`。
-- 金额守恒：`total_amount = service_amount + platform_service_fee`（口径需确认）；`provider_income + commission` 与实付/退款规则一致。
+- 金额守恒：当前 `platform_service_fee=0`，用户应付等于服务金额；`provider_income + platform_commission = paid_amount - refunded_amount`。
 - `referral_rewards.order_id` 唯一；奖励金额 `>= 0` 且不超过确认后的政策上限。
 - 支付渠道交易号唯一；退款渠道交易号唯一。
 
@@ -184,4 +184,65 @@
 - `[DESIGN]` 热搜展示索引覆盖 `display_status + manual_priority + hot_score`；聚合查询索引覆盖 `search_date + search_count`。
 - `[DESIGN]` 敏感搜索词在进入 `search_query_stats` 和人工热搜配置前过滤；数据库不保存用户原始搜索记录、搜索用户关联或可还原的搜索请求信息。
 - `[DESIGN]` 热搜窗口和公式属于运行配置；如未来需要运营审计，应新增配置版本/审计表，不修改历史聚合数据。
+
+## 10. 地点搜索配置数据
+
+- `[DESIGN]` `location_search_keywords` 保存快捷关键词代码、展示名称、地图搜索词、图标、排序、启用状态、乐观锁版本和创建幂等信息。
+- `[DESIGN]` `location_search_rules` 保存 `ALLOW/DENY`、匹配范围、匹配词、原因、优先级和启用状态；拒绝规则优先于允许规则，未命中允许规则的 POI 不返回。
+- `[DESIGN]` 两张表都使用 `public_id/code` 作为稳定业务标识；配置变更通过 `version` 防止并发覆盖，快捷关键词删除为逻辑停用。
+- `[DESIGN]` 搜索结果和用户坐标不建立长期业务表；如后续必须审计搜索，应单独确认匿名化、保留期限和访问权限。
+- `[DESIGN]` 订单地点后续应保存完整地址、经纬度、POI 标识、地点规则版本和必要快照；精确位置的权限脱敏和保留期限必须遵守安全与隐私规则。
+
+## 11. 服务者当前位置和订单见面地点
+
+- `[DESIGN]` `provider_location_states` 只保存服务者当前位置，坐标使用 `LOCATION_ENCRYPTION_KEY` 加密；普通用户当前位置不建立数据库记录。
+- `[DESIGN]` 服务者位置保存模糊后的 GCJ02 坐标、精度、来源、隐私授权版本、有效期、撤销时间和乐观锁版本。
+- `[DESIGN]` `orders` 保存 `meeting_location_*` 完整地址、经纬度、POI、来源和规则版本；该地点是订单履约快照，不是任何用户的实时位置。
+- `[DESIGN]` 订单地点字段只允许订单参与人通过业务接口读取，不能由公开服务者资料或首页接口反向查询。
+- `[DESIGN]` 服务者位置状态采用覆盖更新，不建立连续轨迹历史；撤销只标记时间，不删除必要审计状态。
+
+## 12. 第三方身份和外部支付数据
+
+- `[DESIGN]` `user_auths` 保存第三方稳定 subject/openid/unionid 的哈希或受控标识；手机号哈希、脱敏手机号和第三方绑定关系支持安全合并，但不覆盖历史认证记录。
+- `[DESIGN]` `payments` 保存支付方式、渠道、最小货币单位金额、渠道交易号、客户端 SDK 参数、渠道状态、幂等键、请求指纹和乐观锁版本；`channel_transaction_no` 按渠道唯一。
+- `[DESIGN]` `refunds` 保存原支付单、退款方式、最小货币单位金额、渠道退款号、退款状态、失败原因、幂等键和完成时间；不得用更新流水替代新增退款记录。
+- `[DESIGN]` `order_refund_requests` 状态为 `PENDING/PROCESSING/REFUNDED/REJECTED/FAILED/CANCELED`，同一订单只允许一个 `PENDING` 或 `PROCESSING` 申请。
+- `[DESIGN]` 外部支付/退款回调不新增可篡改的“成功标志”作为事实来源，必须由验签通知更新支付、退款和订单状态，并保留状态日志。
+
+## 13. 订单实时聊天数据
+
+- `[DESIGN]` `messaging_conversations` 保存用户—服务者共享会话事实、开放/只读/关闭状态、最后消息序号和会话版本；`pair_key` 使用 `customer:<user_id>:provider:<provider_user_id>` 并建立唯一约束，同一用户—服务者只允许一个规范会话。
+- `[DESIGN]` `messaging_conversations.order` 保留创建会话时的首个订单并保持唯一，仅作历史兼容；它不代表会话只属于一个订单。
+- `[DESIGN]` `messaging_conversation_order_links` 保存共享会话与多个聊天资格订单的来源关系，订单与关联记录一对一，支持支付成功、历史补齐和新订单幂等复用。
+- `[DESIGN]` `messaging_conversation_members` 保存共享会话双方成员、角色、已读序号、未读计数、加入/离开状态和 `hidden_at`；用户与会话建立唯一约束。`hidden_at` 只控制当前用户可见性，不物理删除会话或消息。
+- `[DESIGN]` 旧的按订单创建的重复会话由兼容服务合并到规范共享会话：迁移消息和订单关联，并隐藏旧重复成员记录；不得删除历史消息或订单事实。
+- `[DESIGN]` `messaging_messages` 保存消息事实、发送者、类型、正文或媒体引用、服务端递增序号、幂等 ID、撤回状态和时间；会话内序号唯一，用户消息按 `conversation + sender + client_message_id` 唯一，系统消息按 `conversation + client_message_id` 唯一。
+- `[DESIGN]` 订单支付成功系统消息使用 `sender=NULL` 和确定性标识 `system:order-paid:<order_no>`，数据库约束保证支付回调、余额支付和历史补齐重复执行时不会生成第二条提示。
+- `[DESIGN]` `messaging_connection_tickets` 只保存一次性 WebSocket 凭证哈希、绑定用户、过期时间、消费时间和请求摘要；不保存明文票据、Access Token 或消息正文。
+- `[DESIGN]` `messaging_message_deliveries` 是消息实时投递 Outbox，按事件 ID、消费者和消息建立幂等记录；Redis Channel Layer 只负责转发，失败由 Celery 重试，不能成为消息事实来源。
+- `[DESIGN]` 消息正文按项目安全策略保护；日志、审计和错误详情不得记录消息正文。媒体引用必须可追溯到 `media_assets` 的发送者、用途和访问策略。
+- `[DESIGN]` 会话关闭、订单取消/退款和完成后的配置化发送窗口（`MESSAGING_COMPLETED_SEND_WINDOW_DAYS`，默认 7 天）只改变可发送状态，不覆盖或物理删除历史消息；180 天留存、匿名化和删除必须由法务确认后执行。
+- `[DESIGN]` 关键查询索引覆盖配对键、订单到共享会话、会话成员可见性、消息序号、幂等键、未读汇总和 Outbox 待投递状态；所有结构变化必须通过 Django 迁移。
+
+## 14. 分享推广数据
+
+- `[DESIGN]` `referral_invite_codes` 保存用户唯一邀请码和启停状态；邀请码不包含用户内部主键。
+- `[DESIGN]` `referral_share_links` 保存邀请人按渠道/活动生成的分享链接、幂等键和一致性摘要；同一用户和幂等键唯一。
+- `[DESIGN]` `referral_visits` 只保存分享链接、访问者/IP/User-Agent 的不可逆摘要和转化用户，不保存明文 IP、设备号或完整 User-Agent。
+- `[DESIGN]` `referral_attributions` 保存被邀请用户、直接邀请人、邀请码、来源链接、注册渠道、风险状态和绑定时间；`invitee_user` 唯一并禁止自邀请。
+- `[DESIGN]` `referral_policies` 是不可变政策版本，保存万分比、单笔上限、最低订单金额、资金来源限制和结算延迟；历史订单引用原政策，不读取最新政策重算。
+- `[DESIGN]` `order_referral_snapshots` 与订单一对一，锁定支付时归因和政策，保存实付、累计退款、奖励基数、比例和预期金额。
+- `[DESIGN]` `referral_rewards` 与奖励快照一对一，保存当前基数、金额、状态、结算时间、收益业务号和乐观锁版本。
+- `[DESIGN]` `referral_reward_adjustments` 保存退款重算、人工更正和已结算追回的正负变化量，按奖励和幂等键唯一，不覆盖原奖励。
+- `[DESIGN]` `referral_reward_status_logs` 保存奖励状态变化、原因、管理员和 trace_id。资金变化仍以 `earning_accounts/earning_transactions` 为最终账务事实。
+- `[DESIGN]` 关键唯一约束覆盖邀请码、用户邀请码、分享幂等键、归因被邀请人、订单快照、奖励快照和奖励调整幂等键；所有结构变化必须通过 Django 迁移。
+- `[DESIGN]` `orders.platform_commission_amount_minor` 保存服务者佣金快照，单位为分；当前由 `PROVIDER_PLATFORM_COMMISSION_RATE_BPS=1000` 计算为 10%，不增加用户应付金额。
+
+## 15. 实名认证与服务者证件资料
+
+- `[DESIGN]` `provider_applications` 新增身份证正反面媒体 UUID；只引用本人上传且用途正确的 `IDENTITY_CARD_FRONT/IDENTITY_CARD_BACK` 媒体。
+- `[DESIGN]` `identity_verifications` 新增真实姓名密文、身份证号密文、身份证 HMAC 和正反面媒体 UUID；`user + verification_type` 仍保持唯一。
+- `[DESIGN]` 姓名和身份证号不保存明文，身份证 HMAC 仅用于受控查重；日志、错误详情、OpenAPI 示例和管理列表不得返回明文。
+- `[DESIGN]` 证件媒体仍保存在 `media_assets`，业务表只保存媒体 UUID；后续对象存储、访问签名和删除策略由媒体模块统一管理。
+- `[DESIGN]` `provider_applications` 新增紧急联系人姓名密文、手机号密文和脱敏手机号；不保存完整手机号明文，接口和日志只使用脱敏展示值。
 

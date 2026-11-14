@@ -1,0 +1,38 @@
+{% extends "adminops/base.html" %}
+{% block title %}服务者申请详情{% endblock %}
+{% block content %}
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<div class="card">
+  <h1>服务者申请详情</h1>
+  <dl class="detail">
+    <div><dt>申请编号</dt><dd>{{ item.application_no }}</dd></div>
+    <div><dt>用户</dt><dd>{{ item.user_public_id }}</dd></div>
+    <div><dt>状态</dt><dd><span class="status {{ item.status }}">{{ item.status }}</span></dd></div>
+    <div><dt>实名状态</dt><dd>{{ item.real_name_status }}</dd></div>
+    <div><dt>人脸状态</dt><dd>{{ item.face_status }}</dd></div>
+    <div><dt>版本</dt><dd>{{ item.version }}</dd></div>
+    <div><dt>个人简介</dt><dd>{{ item.introduction }}</dd></div>
+    <div><dt>紧急联系人</dt><dd>{{ item.emergency_contact_name }} · {{ item.emergency_contact_phone_masked }}</dd></div>
+    <div><dt>拒绝原因</dt><dd>{{ item.reject_reason|default:"—" }}</dd></div>
+  </dl>
+  <h2>申请照片</h2>
+  <div class="media-grid">
+    {% if item.avatar_media %}<div><img class="media" src="{{ item.avatar_media.display_url }}" alt="头像"><div class="muted">头像</div></div>{% endif %}
+    {% if item.id_card_front_media %}<div><img class="media" src="{{ item.id_card_front_media.display_url }}" alt="身份证正面"><div class="muted">身份证正面</div></div>{% endif %}
+    {% if item.id_card_back_media %}<div><img class="media" src="{{ item.id_card_back_media.display_url }}" alt="身份证反面"><div class="muted">身份证反面</div></div>{% endif %}
+    {% for media in item.life_photo_media %}<div><img class="media" src="{{ media.display_url }}" alt="生活照"><div class="muted">生活照</div></div>{% endfor %}
+  </div>
+  {% if item.status == "PENDING" %}
+  <h2>人工审核</h2>
+  <form method="post" action="{% url 'management-provider-review' item.application_no %}">
+    {% csrf_token %}
+    <input type="hidden" name="expected_version" value="{{ item.version }}">
+    <label>审核动作</label>
+    <select name="action"><option value="approve">通过</option><option value="reject">拒绝</option></select>
+    <label>拒绝原因（通过可留空）</label>
+    <textarea name="reason"></textarea>
+    <p><button class="btn primary" type="submit">提交审核</button></p>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

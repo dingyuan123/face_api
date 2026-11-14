@@ -13,11 +13,14 @@ class UserManager(BaseUserManager):
 
     use_in_migrations = True
 
-    def create_user(self, phone_hash: str, phone_masked: str, **extra_fields):
-        """创建用户；调用方必须提供手机号摘要和脱敏手机号。"""
+    def create_user(
+        self,
+        phone_hash: str | None,
+        phone_masked: str = "",
+        **extra_fields,
+    ):
+        """创建手机号用户或尚未绑定手机号的第三方登录用户。"""
 
-        if not phone_hash:
-            raise ValueError("phone_hash is required")
         return self.create(
             phone_hash=phone_hash,
             phone_masked=phone_masked,
@@ -64,9 +67,18 @@ class User(AbstractBaseUser):
     phone_hash = models.CharField(
         max_length=64,
         unique=True,
-        db_comment="手机号 HMAC 摘要，用于唯一识别手机号，不保存明文",
+        null=True,
+        blank=True,
+        db_comment=(
+            "手机号 HMAC 摘要，用于唯一识别手机号，不保存明文；第三方登录且未绑定手机号时为空"
+        ),
     )
-    phone_masked = models.CharField(max_length=16, db_comment="脱敏手机号，仅用于界面展示")
+    phone_masked = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_comment="脱敏手机号，仅用于界面展示；未绑定手机号时为空",
+    )
     phone_encrypted = models.TextField(
         null=True,
         blank=True,
@@ -82,12 +94,19 @@ class User(AbstractBaseUser):
         default=False,
         db_comment="是否已经由用户完成首次身份选择",
     )
+    initial_role = models.CharField(
+        max_length=16,
+        choices=InitialRole.choices,
+        null=True,
+        blank=True,
+        db_comment="用户首次选择的身份，仅用于一次性身份选择校验",
+    )
     primary_role = models.CharField(
         max_length=16,
         choices=InitialRole.choices,
         null=True,
         blank=True,
-        db_comment="用户选择的初始身份：普通用户或服务陪伴者",
+        db_comment="当前主身份：普通用户或服务陪伴者，服务者审核通过后可为 PROVIDER",
     )
     default_workspace = models.CharField(
         max_length=32,
@@ -186,7 +205,10 @@ class UserAuth(models.Model):
     )
     auth_identifier = models.CharField(
         max_length=255,
-        db_comment="认证方式内的唯一标识；手机号登录保存手机号 HMAC",
+        db_comment=(
+            "认证方式内的唯一标识；手机号登录保存手机号 HMAC，"
+            "Apple 和微信登录保存服务端 HMAC，不保存第三方明文标识"
+        ),
     )
     credential_hash = models.CharField(
         max_length=255,
@@ -286,8 +308,18 @@ class LoginRequest(models.Model):
         max_length=64,
         db_comment="登录请求参数摘要，用于拒绝同键不同请求",
     )
-    phone_hash = models.CharField(max_length=64, db_comment="登录手机号 HMAC 摘要")
-    phone_masked = models.CharField(max_length=16, db_comment="脱敏手机号，仅用于展示")
+    phone_hash = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        db_comment="登录手机号 HMAC 摘要；第三方登录时为空",
+    )
+    phone_masked = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_comment="脱敏手机号，仅用于展示；第三方登录时为空",
+    )
     session_id = models.UUIDField(default=uuid.uuid4, db_comment="本次登录设备会话标识")
     user = models.ForeignKey(
         User,

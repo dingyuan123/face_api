@@ -95,6 +95,7 @@ face_api/
 │   │   ├── services.py
 │   │   └── migrations/
 │   ├── discovery/
+│   ├── locations/
 │   ├── orders/
 │   ├── payments/
 │   ├── wallets/

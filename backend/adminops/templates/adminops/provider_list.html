@@ -1,0 +1,34 @@
+{% extends "adminops/base.html" %}
+{% block title %}服务者入驻审核{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>服务者入驻审核</h1>
+  <p class="muted">审核服务者申请资料、身份证照片、生活照和紧急联系人。</p>
+  <form method="get">
+    <label>状态筛选</label>
+    <select name="status" onchange="this.form.submit()">
+      <option value="">全部</option>
+      {% for value, label in status_choices %}
+      <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <table>
+    <thead><tr><th>申请编号</th><th>用户</th><th>状态</th><th>实名状态</th><th>提交时间</th><th>版本</th><th></th></tr></thead>
+    <tbody>
+    {% for item in items %}
+      <tr>
+        <td>{{ item.application_no }}</td>
+        <td>{{ item.user_public_id }}</td>
+        <td><span class="status {{ item.status }}">{{ item.status }}</span></td>
+        <td>{{ item.real_name_status }}</td>
+        <td>{{ item.submitted_at|date:"Y-m-d H:i:s" }}</td>
+        <td>{{ item.version }}</td>
+        <td><a class="btn secondary" href="{% url 'management-provider-detail' item.application_no %}">查看审核</a></td>
+      </tr>
+    {% empty %}<tr><td colspan="7" class="muted">暂无记录</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">共 {{ total }} 条，当前第 {{ page }} 页。</p>
+</div>
+{% endblock %}

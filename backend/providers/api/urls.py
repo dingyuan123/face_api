@@ -7,9 +7,15 @@ from backend.providers.api.views import (
     AdminProviderApplicationRejectView,
     MyProviderApplicationView,
     ProviderApplicationCreateView,
+    ProviderDashboardView,
 )
 
 urlpatterns = [
+    path(
+        "provider-dashboard/",
+        ProviderDashboardView.as_view(),
+        name="provider-dashboard",
+    ),
     path(
         "provider-applications/",
         ProviderApplicationCreateView.as_view(),

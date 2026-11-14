@@ -85,7 +85,7 @@ def _map_dr_exception(exc: Exception, status_code: int) -> tuple[str, str]:
 def _safe_details(detail: Any) -> Any:
     if isinstance(detail, dict):
         return {
-            str(key): "[REDACTED]" if is_sensitive_key(str(key)) else _safe_details(value)
+            str(key): redact_value(value) if is_sensitive_key(str(key)) else _safe_details(value)
             for key, value in detail.items()
         }
     if isinstance(detail, (list, tuple)):

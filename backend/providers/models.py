@@ -40,6 +40,34 @@ class ProviderApplication(models.Model):
     real_name_encrypted = models.TextField(db_comment="真实姓名密文；接口和日志不得返回明文")
     id_card_encrypted = models.TextField(db_comment="身份证号密文；接口和日志不得返回明文")
     id_card_hash = models.CharField(max_length=64, db_comment="身份证号带密钥 HMAC，用于受控查重")
+    id_card_front_media_id = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_comment="身份证正面照片媒体 UUID；只允许本人上传的实名认证照片",
+    )
+    id_card_back_media_id = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_comment="身份证反面照片媒体 UUID；只允许本人上传的实名认证照片",
+    )
+    emergency_contact_name_encrypted = models.TextField(
+        blank=True,
+        default="",
+        db_comment="紧急联系人姓名密文；接口和日志不得返回加密原值",
+    )
+    emergency_contact_phone_encrypted = models.TextField(
+        blank=True,
+        default="",
+        db_comment="紧急联系人手机号密文；接口和日志不得返回完整手机号",
+    )
+    emergency_contact_phone_masked = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_comment="紧急联系人手机号脱敏展示值，例如 138****8000",
+    )
     avatar_media_id = models.CharField(max_length=128, db_comment="申请头像媒体 UUID")
     life_photo_media_ids = models.JSONField(
         default=list,
@@ -277,4 +305,80 @@ class ProviderProfileMedia(models.Model):
                 fields=["profile", "position"],
                 name="uniq_provider_profile_media_position",
             ),
+        ]
+
+
+class ProviderAnalyticsEvent(models.Model):
+    """服务者数据看板的匿名浏览和转化事件记录。"""
+
+    class EventType(models.TextChoices):
+        PROFILE_VIEW = "PROFILE_VIEW", "查看主页"
+        SERVICE_VIEW = "SERVICE_VIEW", "查看服务"
+        BOOKING_STARTED = "BOOKING_STARTED", "发起预约"
+        PAYMENT_SUCCESS = "PAYMENT_SUCCESS", "完成支付"
+        ORDER_COMPLETED = "ORDER_COMPLETED", "完成订单"
+
+    id = models.BigAutoField(primary_key=True, db_comment="服务者分析事件自增主键")
+    provider_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="provider_analytics_events",
+        db_comment="分析事件所属服务者用户",
+    )
+    event_type = models.CharField(
+        max_length=32,
+        choices=EventType.choices,
+        db_comment="分析事件类型：主页、服务、预约、支付或完成订单",
+    )
+    service_public_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_comment="关联服务公开 UUID；主页事件为空",
+    )
+    biz_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="订单或支付业务标识，用于业务事件幂等；浏览事件为空",
+    )
+    visitor_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="匿名访客标识 HMAC；不保存客户端原始 visitor_id",
+    )
+    ip_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="请求 IP HMAC；不保存明文 IP",
+    )
+    user_agent_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="User-Agent HMAC；不保存完整原始字符串",
+    )
+    event_key = models.CharField(
+        max_length=160,
+        blank=True,
+        default="",
+        db_comment="业务事件幂等键；浏览事件可为空",
+    )
+    occurred_at = models.DateTimeField(auto_now_add=True, db_comment="分析事件发生时间")
+
+    class Meta:
+        db_table = "provider_analytics_events"
+        db_table_comment = "服务者数据看板匿名浏览和转化事件表"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["event_key"],
+                condition=models.Q(event_key__isnull=False) & ~models.Q(event_key=""),
+                name="uniq_provider_analytics_event_key",
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["provider_user", "event_type", "occurred_at"]),
+            models.Index(fields=["provider_user", "occurred_at"]),
+            models.Index(fields=["visitor_hash", "occurred_at"]),
         ]

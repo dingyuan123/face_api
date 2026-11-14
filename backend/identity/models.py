@@ -19,13 +19,49 @@ class IdentityVerification(models.Model):
         MOCK_PASSED = "MOCK_PASSED", "Mock 已通过"
         PASSED = "PASSED", "已通过"
         FAILED = "FAILED", "未通过"
+        REJECTED = "REJECTED", "人工审核拒绝"
 
     id = models.BigAutoField(primary_key=True, db_comment="身份认证记录自增主键")
+    verification_no = models.UUIDField(
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+        db_comment="对外实名认证业务 UUID，不暴露自增主键；历史记录可为空",
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="identity_verifications",
         db_comment="认证记录所属用户；用户删除时同步删除认证记录",
+    )
+    real_name_encrypted = models.TextField(
+        blank=True,
+        default="",
+        db_comment="真实姓名密文；接口和日志不得返回明文",
+    )
+    id_card_number_encrypted = models.TextField(
+        blank=True,
+        default="",
+        db_comment="身份证号密文；接口和日志不得返回明文",
+    )
+    id_card_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="身份证号带密钥 HMAC；仅用于受控查重，不保存明文",
+    )
+    id_card_front_media_id = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_comment="身份证正面照片媒体 UUID；只允许本人上传的实名认证照片",
+    )
+    id_card_back_media_id = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_comment="身份证反面照片媒体 UUID；只允许本人上传的实名认证照片",
     )
     verification_type = models.CharField(
         max_length=16,
@@ -36,7 +72,39 @@ class IdentityVerification(models.Model):
         max_length=16,
         choices=Status.choices,
         default=Status.NOT_SUBMITTED,
-        db_comment="认证状态：未提交、认证中、Mock 已通过、真实通过或失败",
+        db_comment="认证状态：未提交、认证中、Mock 通过、人工通过、失败或人工拒绝",
+    )
+    reject_reason = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_comment="人工审核拒绝原因；通过或未审核时为空",
+    )
+    reviewer_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        db_comment="执行人工审核的管理员用户主键",
+    )
+    reviewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_comment="人工审核完成时间",
+    )
+    idempotency_key = models.CharField(
+        max_length=128,
+        null=True,
+        blank=True,
+        db_comment="实名资料提交幂等键，按用户隔离重复提交",
+    )
+    request_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="姓名、证件和照片引用的一致性摘要",
+    )
+    version = models.PositiveIntegerField(
+        default=1,
+        db_comment="实名认证乐观锁版本号",
     )
     provider_request_no = models.CharField(
         max_length=128,
@@ -62,5 +130,10 @@ class IdentityVerification(models.Model):
             models.UniqueConstraint(
                 fields=["user", "verification_type"],
                 name="uniq_identity_user_type",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["user", "idempotency_key"],
+                condition=models.Q(idempotency_key__isnull=False),
+                name="uniq_identity_user_idempotency",
+            ),
         ]

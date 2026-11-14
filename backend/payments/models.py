@@ -8,10 +8,12 @@ from django.db import models
 
 
 class Payment(models.Model):
-    """订单支付单，当前支持内部钱包余额渠道。"""
+    """订单支付单，支持钱包余额、微信 App 支付和支付宝 App 支付。"""
 
     class Method(models.TextChoices):
         BALANCE = "BALANCE", "钱包余额"
+        WECHAT_APP = "WECHAT_APP", "微信 App 支付"
+        ALIPAY_APP = "ALIPAY_APP", "支付宝 App 支付"
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "待支付"
@@ -38,12 +40,12 @@ class Payment(models.Model):
         max_length=32,
         choices=Method.choices,
         default=Method.BALANCE,
-        db_comment="支付方式；当前支持钱包余额",
+        db_comment="支付方式：钱包余额、微信 App 支付或支付宝 App 支付",
     )
     payment_channel = models.CharField(
         max_length=32,
         default="INTERNAL",
-        db_comment="支付渠道；当前为内部余额，未来可扩展微信或支付宝",
+        db_comment="支付渠道：内部余额、微信支付或支付宝",
     )
     currency = models.CharField(max_length=3, default="CNY", db_comment="支付币种")
     amount_minor = models.BigIntegerField(db_comment="支付金额，单位为分")
@@ -57,12 +59,40 @@ class Payment(models.Model):
         max_length=128,
         blank=True,
         default="",
-        db_comment="支付渠道交易号；余额支付为空",
+        db_comment="微信交易号或支付宝交易号；余额支付为空，成功后全局可追溯",
+    )
+    channel_reference = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_comment="支付渠道预支付标识或内部调用引用；不保存渠道密钥",
+    )
+    client_payload = models.JSONField(
+        default=dict,
+        blank=True,
+        db_comment="返回给原生支付 SDK 的一次性支付参数；不保存商户私钥或 API 密钥",
+    )
+    channel_status = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_comment="支付渠道原始业务状态，仅用于诊断和对账，不替代平台支付状态",
+    )
+    failure_reason = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        db_comment="支付创建或回调失败原因；不保存完整第三方响应或敏感凭据",
     )
     idempotency_key = models.CharField(max_length=128, db_comment="支付请求幂等键")
     request_fingerprint = models.CharField(max_length=64, db_comment="支付请求一致性摘要")
     version = models.PositiveIntegerField(default=1, db_comment="支付单乐观锁版本号")
     paid_at = models.DateTimeField(null=True, blank=True, db_comment="支付成功时间")
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_comment="第三方预支付参数失效时间；余额支付为空",
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_comment="支付单创建时间")
     updated_at = models.DateTimeField(auto_now=True, db_comment="支付单最近更新时间")
 
@@ -79,6 +109,11 @@ class Payment(models.Model):
                 condition=models.Q(status="SUCCESS"),
                 name="uniq_payment_successful_order",
             ),
+            models.UniqueConstraint(
+                fields=["payment_channel", "channel_transaction_no"],
+                condition=~models.Q(channel_transaction_no=""),
+                name="uniq_payment_channel_transaction",
+            ),
             models.CheckConstraint(
                 condition=models.Q(amount_minor__gt=0),
                 name="check_payment_amount_positive",
@@ -91,10 +126,12 @@ class Payment(models.Model):
 
 
 class Refund(models.Model):
-    """支付退款单，当前钱包余额原路退回。"""
+    """支付退款单，按原支付渠道退回钱包、微信支付或支付宝。"""
 
     class Method(models.TextChoices):
         BALANCE = "BALANCE", "钱包余额"
+        WECHAT_APP = "WECHAT_APP", "微信 App 支付"
+        ALIPAY_APP = "ALIPAY_APP", "支付宝 App 支付"
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "退款中"
@@ -125,19 +162,41 @@ class Refund(models.Model):
         max_length=32,
         choices=Method.choices,
         default=Method.BALANCE,
-        db_comment="退款方式；余额支付原路退回钱包",
+        db_comment="退款方式，必须与支付单原支付渠道一致",
     )
     currency = models.CharField(max_length=3, default="CNY", db_comment="退款币种")
     refund_amount_minor = models.BigIntegerField(db_comment="退款金额，单位为分")
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
-        default=Status.SUCCESS,
+        default=Status.PENDING,
         db_comment="退款单状态",
+    )
+    channel_refund_no = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        db_comment="微信退款单号或支付宝退款流水号；余额退款为空",
+    )
+    channel_status = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_comment="退款渠道原始业务状态，仅用于诊断和对账",
+    )
+    failure_reason = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        db_comment="退款失败或渠道拒绝原因；不保存完整敏感响应",
     )
     idempotency_key = models.CharField(max_length=128, db_comment="退款请求幂等键")
     created_at = models.DateTimeField(auto_now_add=True, db_comment="退款单创建时间")
-    completed_at = models.DateTimeField(auto_now_add=True, db_comment="退款完成时间")
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_comment="退款成功确认时间；处理中或失败时为空",
+    )
 
     class Meta:
         db_table = "refunds"
@@ -146,6 +205,11 @@ class Refund(models.Model):
             models.UniqueConstraint(
                 fields=["payment", "idempotency_key"],
                 name="uniq_refund_payment_idempotency",
+            ),
+            models.UniqueConstraint(
+                fields=["payment", "channel_refund_no"],
+                condition=~models.Q(channel_refund_no=""),
+                name="uniq_refund_payment_channel_refund",
             ),
             models.CheckConstraint(
                 condition=models.Q(refund_amount_minor__gt=0),

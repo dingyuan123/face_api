@@ -54,6 +54,8 @@ def test_production_configuration_rejects_identity_mock() -> None:
         "PHONE_HASH_KEY": "production-test-phone-key",
         "CORS_ALLOWED_ORIGINS": "https://app.example.test",
         "IDENTITY_ENCRYPTION_KEY": "production-test-identity-key",
+        "LOCATION_ENCRYPTION_KEY": "production-test-location-key",
+        "LOCATION_SELECTION_SIGNING_KEY": "production-test-location-signing-key",
         "IDENTITY_MOCK_ENABLED": "true",
         "MEDIA_URL_SIGNING_KEY": "production-test-media-signing-key",
         "PAYMENT_MODE": "REAL",
@@ -73,3 +75,66 @@ def test_production_configuration_rejects_identity_mock() -> None:
 
     assert result.returncode != 0
     assert "禁止启用身份认证 Mock" in result.stderr
+
+
+def test_production_configuration_reports_missing_oauth_and_payment_credentials() -> None:
+    external_credential_names = (
+        "WECHAT_PAY_MCH_ID",
+        "WECHAT_PAY_APP_ID",
+        "WECHAT_PAY_API_V3_KEY",
+        "WECHAT_PAY_MERCHANT_SERIAL_NO",
+        "WECHAT_PAY_PRIVATE_KEY",
+        "WECHAT_PAY_PLATFORM_PUBLIC_KEY",
+        "WECHAT_PAY_PLATFORM_PUBLIC_KEY_ID",
+        "WECHAT_PAY_NOTIFY_URL",
+        "ALIPAY_APP_ID",
+        "ALIPAY_PRIVATE_KEY",
+        "ALIPAY_PUBLIC_KEY",
+        "ALIPAY_NOTIFY_URL",
+        "APPLE_CLIENT_ID",
+        "WECHAT_LOGIN_APP_ID",
+        "WECHAT_LOGIN_APP_SECRET",
+    )
+    env = {
+        **os.environ,
+        **dict.fromkeys(external_credential_names, ""),
+        "DJANGO_ENV": "production",
+        "DJANGO_SETTINGS_MODULE": "backend.config.settings.prod",
+        "DJANGO_SECRET_KEY": "production-test-secret-key",
+        "DJANGO_ALLOWED_HOSTS": "api.example.test",
+        "POSTGRES_DB": "test",
+        "POSTGRES_USER": "test",
+        "POSTGRES_PASSWORD": "test",
+        "POSTGRES_HOST": "localhost",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "CELERY_BROKER_URL": "redis://localhost:6379/1",
+        "CELERY_RESULT_BACKEND": "redis://localhost:6379/2",
+        "AUTH_TOKEN_SIGNING_KEY": "production-test-token-key",
+        "PHONE_HASH_KEY": "production-test-phone-key",
+        "CORS_ALLOWED_ORIGINS": "https://app.example.test",
+        "IDENTITY_ENCRYPTION_KEY": "production-test-identity-key",
+        "LOCATION_ENCRYPTION_KEY": "production-test-location-key",
+        "LOCATION_SELECTION_SIGNING_KEY": "production-test-location-signing-key",
+        "IDENTITY_MOCK_ENABLED": "false",
+        "MEDIA_URL_SIGNING_KEY": "production-test-media-signing-key",
+        "PAYMENT_MODE": "REAL",
+        "PAYMENT_GATEWAY_MODE": "REAL",
+        "ENABLE_DEV_WALLET_TOPUP": "false",
+        "PAYOUT_MODE": "REAL",
+        "PAYOUT_VERIFICATION_MODE": "REAL",
+        "WITHDRAWAL_MIN_AMOUNT_MINOR": "1000",
+    }
+
+    result = subprocess.run(
+        [sys.executable, "manage.py", "check"],
+        env=env,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "WECHAT_PAY_MCH_ID" in result.stderr
+    assert "ALIPAY_APP_ID" in result.stderr
+    assert "APPLE_CLIENT_ID" in result.stderr
+    assert "WECHAT_LOGIN_APP_SECRET" in result.stderr

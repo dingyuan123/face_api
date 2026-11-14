@@ -15,8 +15,10 @@
 4. 安装依赖：`.venv\Scripts\python -m pip install -r requirements-dev.txt`。
 5. 检查配置：`.venv\Scripts\python manage.py check`。
 6. 应用迁移：`.venv\Scripts\python manage.py migrate --noinput`。
-7. 启动 API：`.venv\Scripts\python manage.py runserver 0.0.0.0:8000`。
-8. 启动异步 Worker：`.venv\Scripts\celery -A backend.config worker --loglevel=INFO`。
+7. 启动 HTTP + WebSocket API：`.venv\Scripts\python -m daphne -b 0.0.0.0 -p 8000 backend.config.asgi:application`。
+8. 启动异步 Worker：`.venv\Scripts\python -m celery -A backend.config worker --pool=solo --loglevel=INFO`。
+
+订单聊天必须使用 Daphne/ASGI 启动；`manage.py runserver` 只适合纯 HTTP 调试，不能作为 WebSocket 联调服务。
 
 开发阶段上传图片默认保存到 `var/media/`，可通过 `MEDIA_ROOT` 修改；该目录只保存开发文件，不提交 Git。Docker Compose 使用 `media_data` 卷持久化 `/app/var/media`。生产接入 OSS/COS 前，必须为生产配置持久化目录或切换存储适配器。
 
@@ -41,6 +43,13 @@ Compose 仅用于开发。它的默认密码和密钥不是生产凭据，禁止
 - `MEDIA_ROOT` 控制本地媒体目录，`MEDIA_MAX_UPLOAD_BYTES`、图片尺寸和像素限制均通过环境变量配置。
 - `MEDIA_URL_SIGNING_KEY` 控制 `display_url` 签名，开发环境使用本地值；生产必须使用独立密钥并支持 `MEDIA_URL_SIGNING_KEY_VERSION` 轮换。
 - `PROFILE_DEFAULT_CITY_CODE`、昵称长度、签名长度和兴趣标签数量控制个人资料规则；首批兴趣标签和城市选项由数据库配置表维护。
+- `PUBLIC_SHARE_BASE_URL` 控制资讯和用户主页公开分享链接；`SHARE_POSTER_*` 控制分享海报品牌、主文案、底部文案和微信分享文案。
+- `H5_ROOT` 默认指向项目根目录的 `h5` 文件夹；当前由后端公开托管 `h5/invite/index.html`，邀请链接使用 `/invite/?invite_code=...&share_no=...`。
+- `REFERRAL_REWARD_RATE_BPS` 只是启动默认值；正式奖励必须由管理员创建不可变 `referral_policies` 版本。`REFERRAL_REWARD_DELAY_DAYS` 控制完成后的结算观察期，`REFERRAL_VISIT_RETENTION_DAYS` 控制匿名分享访问留存。
+- `PROVIDER_PLATFORM_COMMISSION_RATE_BPS=1000` 表示从服务者收入抽取 10% 佣金；用户订单平台服务费当前固定为 0。
+- `qrcode` 依赖用于生成分享主页二维码 PNG；二维码图片地址带短期签名，生产可将 `MEDIA_ROOT` 切换到对象存储适配层。
+- 修改 `PUBLIC_SHARE_BASE_URL` 后执行 `python manage.py refresh_referral_qr_codes`，确保已经生成的二维码重新编码当前邀请落地页地址。
+- 手动结算推广奖励可执行 `python manage.py settle_referral_rewards --limit 100`；生产应由 Celery Beat 调用 `settle_referral_rewards_task`。
 - `backend.config.settings.prod` 在缺少生产必需变量或使用开发默认密钥时启动失败。
 - 任何真实密钥只从环境变量或密钥服务注入，禁止写入 Git、镜像或日志。
 
@@ -84,6 +93,7 @@ python manage.py spectacular --file openapi.yaml
 ## 8. Django Admin（开发查看）
 
 - 访问地址：`/admin/`。
+- 测试管理后台地址：`/management/`，首期包含总览、实名认证人工审核和服务者入驻人工审核；使用 `is_staff` 管理员账号登录。
 - 登录用户名使用完整手机号，不是 `phone_hash`。
 - 创建或提升管理员账号：
   ```powershell
