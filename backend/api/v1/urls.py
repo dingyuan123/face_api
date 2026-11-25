@@ -6,6 +6,8 @@ from rest_framework.decorators import api_view
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from backend.adminops.api.public_views import PublicCompanyProfileView
+
 
 @extend_schema(auth=[], responses={200: OpenApiTypes.OBJECT})
 @api_view(["GET"])
@@ -40,6 +42,8 @@ urlpatterns = [
     path("", include("backend.orders.api.urls")),
     path("", include("backend.payments.api.urls")),
     path("", include("backend.messaging.api.urls")),
+    path("", include("backend.moderation.api.user_urls")),
+    path("", include("backend.support.api.user_urls")),
     path("", include("backend.referrals.api.urls")),
     path("", include("backend.reviews.api.urls")),
     path("", include("backend.payouts.api.urls")),
@@ -47,6 +51,11 @@ urlpatterns = [
     path("", include("backend.providers.api.public_urls")),
     path("", include("backend.providers.api.urls")),
     path("", include("backend.locations.api.urls")),
+    path(
+        "company-profile/",
+        PublicCompanyProfileView.as_view(),
+        name="company-profile",
+    ),
     path("health/", include("backend.health.urls")),
     path("schema/", SpectacularAPIView.as_view(), name="schema"),
     path("docs/", SpectacularSwaggerView.as_view(url_name="v1:schema"), name="swagger-ui"),

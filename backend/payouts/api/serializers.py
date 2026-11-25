@@ -41,9 +41,13 @@ class PayoutMethodResponseSerializer(serializers.Serializer):
 
     id = serializers.UUIDField(help_text="收款方式 UUID")
     method_type = serializers.CharField(help_text="收款方式类型")
+    method_type_text = serializers.CharField(help_text="收款方式类型中文含义")
     binding_mode = serializers.CharField(help_text="绑定方式，当前为 MANUAL，预留 OAUTH")
+    binding_mode_text = serializers.CharField(help_text="绑定方式中文含义")
     status = serializers.CharField(help_text="收款方式状态")
+    status_text = serializers.CharField(help_text="收款方式状态中文含义")
     verification_status = serializers.CharField(help_text="账户验证状态，当前为模拟验证")
+    verification_status_text = serializers.CharField(help_text="账户验证状态中文含义")
     is_default = serializers.BooleanField(help_text="是否为默认收款方式")
     account_name_masked = serializers.CharField(help_text="账户姓名脱敏值")
     account_number_masked = serializers.CharField(help_text="收款账号脱敏值")
@@ -69,6 +73,7 @@ class EarningAccountResponseSerializer(serializers.Serializer):
     """服务者收入或普通用户推广收益账户汇总。"""
 
     account_type = serializers.CharField(help_text="账户类型，PROVIDER_INCOME 或 REFERRAL_REWARD")
+    account_type_text = serializers.CharField(help_text="收益账户类型中文含义")
     currency = serializers.CharField(help_text="币种代码")
     available_amount_minor = serializers.IntegerField(help_text="可提现金额，单位为分")
     frozen_amount_minor = serializers.IntegerField(help_text="提现冻结金额，单位为分")
@@ -92,6 +97,7 @@ class EarningEntryResponseSerializer(serializers.Serializer):
     platform_fee_amount_minor = serializers.IntegerField(help_text="平台佣金，单位为分")
     net_amount_minor = serializers.IntegerField(help_text="实际入账收益，单位为分")
     status = serializers.CharField(help_text="收益结算状态")
+    status_text = serializers.CharField(help_text="收益结算状态中文含义")
     available_at = serializers.DateTimeField(help_text="最早可结算时间")
     settled_at = serializers.DateTimeField(allow_null=True, help_text="实际结算时间")
     created_at = serializers.DateTimeField(help_text="收益记录创建时间")
@@ -111,7 +117,9 @@ class EarningTransactionResponseSerializer(serializers.Serializer):
 
     transaction_no = serializers.UUIDField(help_text="收益流水 UUID")
     direction = serializers.CharField(help_text="资金方向，CREDIT、DEBIT、HOLD 或 RELEASE")
+    direction_text = serializers.CharField(help_text="资金方向中文含义")
     transaction_type = serializers.CharField(help_text="流水业务类型")
+    transaction_type_text = serializers.CharField(help_text="流水业务类型中文含义")
     business_type = serializers.CharField(help_text="关联业务类型")
     business_no = serializers.CharField(help_text="关联业务单号")
     currency = serializers.CharField(help_text="币种代码")
@@ -174,6 +182,7 @@ class WithdrawalPayoutMethodSerializer(serializers.Serializer):
 
     id = serializers.UUIDField(help_text="收款方式 UUID")
     method_type = serializers.CharField(help_text="收款方式类型")
+    method_type_text = serializers.CharField(help_text="收款方式类型中文含义")
     display_text = serializers.CharField(help_text="收款账户脱敏展示文案")
 
 
@@ -182,11 +191,13 @@ class WithdrawalResponseSerializer(serializers.Serializer):
 
     withdrawal_no = serializers.UUIDField(help_text="提现单 UUID")
     account_type = serializers.CharField(help_text="提现账户类型")
+    account_type_text = serializers.CharField(help_text="提现账户类型中文含义")
     currency = serializers.CharField(help_text="币种代码")
     amount_minor = serializers.IntegerField(help_text="申请提现总额，单位为分")
     fee_amount_minor = serializers.IntegerField(help_text="提现手续费，单位为分")
     payout_amount_minor = serializers.IntegerField(help_text="实际打款金额，单位为分")
     status = serializers.CharField(help_text="提现状态")
+    status_text = serializers.CharField(help_text="提现状态中文含义")
     payout_method = WithdrawalPayoutMethodSerializer(help_text="脱敏收款方式快照")
     review_note = serializers.CharField(help_text="人工审核说明")
     failure_reason = serializers.CharField(help_text="打款失败原因")

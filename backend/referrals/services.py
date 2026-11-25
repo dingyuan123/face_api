@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from backend.accounts.models import User
 from backend.common.crypto import sensitive_fingerprint
+from backend.common.display import enum_label
 from backend.common.errors import ErrorCode
 from backend.common.exceptions import ApiError
 from backend.referrals.models import (
@@ -119,8 +120,10 @@ def share_link_payload(link: ReferralShareLink, share_url: str) -> dict[str, Any
         "share_no": str(link.share_no),
         "invite_code": link.invite_code.code,
         "channel": link.channel,
+        "channel_text": enum_label(ReferralShareLink.Channel, link.channel),
         "campaign_code": link.campaign_code,
         "status": link.status,
+        "status_text": enum_label(ReferralShareLink.Status, link.status),
         "share_url": share_url,
         "created_at": link.created_at,
         "expires_at": link.expires_at,

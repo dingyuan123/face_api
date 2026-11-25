@@ -53,6 +53,7 @@ class ProviderApplicationResponseSerializer(serializers.Serializer):
 
     application_no = serializers.CharField(allow_null=True, help_text="服务者申请业务编号")
     status = serializers.CharField(help_text="申请状态")
+    status_text = serializers.CharField(help_text="申请状态中文含义")
     introduction = serializers.CharField(help_text="服务者个人简介")
     avatar_media_id = serializers.CharField(allow_null=True, help_text="头像媒体 ID")
     id_card_front_media_id = serializers.CharField(
@@ -72,7 +73,9 @@ class ProviderApplicationResponseSerializer(serializers.Serializer):
         help_text="生活照媒体 ID 列表",
     )
     real_name_status = serializers.CharField(help_text="实名认证状态，不返回真实姓名")
+    real_name_status_text = serializers.CharField(help_text="实名认证状态中文含义")
     face_status = serializers.CharField(help_text="人脸认证状态")
+    face_status_text = serializers.CharField(help_text="人脸认证状态中文含义")
     reject_reason = serializers.CharField(help_text="管理员拒绝原因；未拒绝时为空")
     submitted_at = serializers.DateTimeField(allow_null=True, help_text="申请提交时间")
     updated_at = serializers.DateTimeField(allow_null=True, help_text="申请最近更新时间")

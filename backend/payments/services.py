@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from backend.accounts.models import User
 from backend.common.crypto import sensitive_fingerprint
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.integrations.payments.contracts import (
@@ -53,10 +54,12 @@ def payment_payload(payment: Payment) -> dict[str, Any]:
         "payment_no": str(payment.payment_no),
         "order_no": payment.order_no,
         "payment_method": payment.payment_method,
+        "payment_method_text": enum_label(Payment.Method, payment.payment_method),
         "payment_channel": payment.payment_channel,
         "currency": payment.currency,
         "amount_minor": payment.amount_minor,
         "status": payment.status,
+        "status_text": enum_label(Payment.Status, payment.status),
         "client_payload": payment.client_payload,
         "expires_at": payment.expires_at,
         "paid_at": payment.paid_at,
@@ -458,10 +461,22 @@ def register_refund(
             status_code=409,
             details={"payment_status": "支付单未成功，不能退款"},
         )
-    if refund_amount_minor != payment.amount_minor:
+    if refund_amount_minor <= 0:
         raise ApiError(
             ErrorCode.PAYMENT_AMOUNT_MISMATCH,
-            ERROR_MESSAGES[ErrorCode.PAYMENT_AMOUNT_MISMATCH],
+            "退款金额必须大于 0",
+            status_code=400,
+        )
+    already_refundable = sum(
+        item.refund_amount_minor
+        for item in payment.refunds.filter(
+            status__in=[Refund.Status.PENDING, Refund.Status.SUCCESS]
+        )
+    )
+    if refund_amount_minor > payment.amount_minor - already_refundable:
+        raise ApiError(
+            ErrorCode.PAYMENT_AMOUNT_MISMATCH,
+            "退款金额超过支付单剩余可退金额",
             status_code=409,
         )
     refund_method = Payment.Method(payment.payment_method)

@@ -184,6 +184,44 @@ def test_apple_identity_token_checks_nonce_and_audience(monkeypatch) -> None:
     assert identity.subject == "apple-user-1"
 
 
+def test_apple_identity_token_accepts_missing_nonce_for_uniapp_sdk(
+    monkeypatch,
+) -> None:
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = jwt.encode(
+        {
+            "iss": "https://appleid.apple.com",
+            "aud": "com.example.jianmianliao",
+            "sub": "apple-user-no-nonce",
+            "iat": int(time.time()),
+            "exp": int(time.time()) + 300,
+        },
+        private_key,
+        algorithm="RS256",
+    )
+
+    class FakeJwkClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def get_signing_key_from_jwt(self, _token: str):
+            return type(
+                "SigningKey",
+                (),
+                {"key": private_key.public_key()},
+            )()
+
+    monkeypatch.setattr("backend.integrations.oauth.apple.PyJWKClient", FakeJwkClient)
+    with override_settings(APPLE_CLIENT_ID="com.example.jianmianliao"):
+        identity = AppleLoginProvider().verify(
+            identity_token=token,
+            nonce="client-generated-nonce",
+        )
+
+    assert identity.subject == "apple-user-no-nonce"
+    assert identity.nonce_verified is False
+
+
 def test_wechat_provider_uses_server_side_code_exchange(monkeypatch) -> None:
     captured = {}
 

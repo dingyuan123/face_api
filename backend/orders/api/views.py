@@ -237,6 +237,7 @@ class AdminOrderRefundRequestApproveView(APIView):
                 request_no=request_no,
                 expected_version=serializer.validated_data["expected_version"],
                 review_note=serializer.validated_data["review_note"],
+                refund_amount_minor=serializer.validated_data.get("refund_amount_minor"),
             )
         )
 

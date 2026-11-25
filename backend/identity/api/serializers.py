@@ -34,7 +34,9 @@ class IdentityVerificationResponseSerializer(serializers.Serializer):
 
     verification_no = serializers.UUIDField(allow_null=True, help_text="实名认证业务 UUID")
     status = serializers.CharField(help_text="实名认证状态")
+    status_text = serializers.CharField(help_text="实名认证状态中文含义")
     real_name_status = serializers.CharField(help_text="实名认证状态兼容字段")
+    real_name_status_text = serializers.CharField(help_text="实名认证状态中文含义")
     id_card_front_media_id = serializers.CharField(
         allow_null=True,
         help_text="身份证正面照片媒体 ID",

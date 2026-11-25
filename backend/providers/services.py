@@ -19,6 +19,7 @@ from backend.common.crypto import (
     hash_sensitive_text,
     sensitive_fingerprint,
 )
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.identity.models import IdentityVerification
@@ -531,6 +532,7 @@ def application_payload(
         return {
             "application_no": None,
             "status": "NOT_SUBMITTED",
+            "status_text": "未提交",
             "introduction": "",
             "avatar_media_id": None,
             "id_card_front_media_id": None,
@@ -539,7 +541,9 @@ def application_payload(
             "emergency_contact_phone_masked": "",
             "life_photo_media_ids": [],
             "real_name_status": "NOT_SUBMITTED",
+            "real_name_status_text": "未提交",
             "face_status": "NOT_SUBMITTED",
+            "face_status_text": "未提交",
             "reject_reason": "",
             "submitted_at": None,
             "updated_at": None,
@@ -570,6 +574,7 @@ def application_payload(
     return {
         "application_no": application.application_no,
         "status": application.status,
+        "status_text": enum_label(ProviderApplication.Status, application.status),
         "introduction": application.introduction,
         "avatar_media_id": application.avatar_media_id,
         "id_card_front_media_id": application.id_card_front_media_id or None,
@@ -580,7 +585,15 @@ def application_payload(
         "emergency_contact_phone_masked": application.emergency_contact_phone_masked,
         "life_photo_media_ids": application.life_photo_media_ids,
         "real_name_status": application.real_name_status,
+        "real_name_status_text": enum_label(
+            IdentityVerification.Status,
+            application.real_name_status,
+        ),
         "face_status": application.face_status,
+        "face_status_text": enum_label(
+            IdentityVerification.Status,
+            application.face_status,
+        ),
         "reject_reason": application.reject_reason,
         "submitted_at": application.submitted_at,
         "updated_at": application.updated_at,

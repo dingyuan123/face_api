@@ -14,7 +14,11 @@ build/
 .vscode/
 var/media/
 var/test-media/
+var/test-*/
 var/media/
 secret/
 h5/.DS_Store
+face_admin/
+api.zip
+.tmp-alipay-sdk/
 

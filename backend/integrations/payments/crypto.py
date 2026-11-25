@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -15,20 +16,20 @@ from backend.integrations.payments.contracts import PaymentGatewayUnavailable
 
 
 def load_private_key(value: str) -> PrivateKeyTypes:
-    """从本地密钥文件路径或 PEM 环境变量加载商户私钥，不记录密钥内容。"""
+    """从文件、PEM 或 Base64 DER 环境变量加载商户私钥。"""
     raw = _read_key_material(value)
     try:
-        key = serialization.load_pem_private_key(raw, password=None)
+        key = _load_private_key_bytes(raw)
     except (ValueError, TypeError) as exc:
         raise PaymentGatewayUnavailable("支付商户私钥配置无效") from exc
     return key
 
 
 def load_public_key(value: str) -> PublicKeyTypes:
-    """从本地证书/公钥文件路径或 PEM 环境变量加载支付平台公钥。"""
+    """从文件、PEM 或 Base64 DER 环境变量加载支付平台公钥。"""
     raw = _read_key_material(value)
     try:
-        return serialization.load_pem_public_key(raw)
+        return _load_public_key_bytes(raw)
     except (ValueError, TypeError) as exc:
         raise PaymentGatewayUnavailable("支付平台公钥配置无效") from exc
 
@@ -52,10 +53,34 @@ def yuan_to_minor(value: object) -> int:
 
 
 def _read_key_material(value: str) -> bytes:
+    """读取文件内容或规范化环境变量中的 PEM/Base64 DER 密钥。"""
     normalized = value.strip()
     if not normalized:
         raise PaymentGatewayUnavailable("支付密钥未配置")
     candidate = Path(normalized)
     if candidate.is_file():
         return candidate.read_bytes()
-    return normalized.replace("\\n", "\n").encode()
+    pem_value = normalized.replace("\\n", "\n")
+    if pem_value.startswith("-----BEGIN "):
+        return pem_value.encode()
+    compact = "".join(pem_value.split())
+    try:
+        return base64.b64decode(compact, validate=True)
+    except (ValueError, TypeError):
+        return pem_value.encode()
+
+
+def _load_private_key_bytes(raw: bytes) -> PrivateKeyTypes:
+    """兼容 PEM 和 DER 编码的商户私钥。"""
+    try:
+        return serialization.load_pem_private_key(raw, password=None)
+    except (ValueError, TypeError):
+        return serialization.load_der_private_key(raw, password=None)
+
+
+def _load_public_key_bytes(raw: bytes) -> PublicKeyTypes:
+    """兼容 PEM 和 DER 编码的支付平台公钥。"""
+    try:
+        return serialization.load_pem_public_key(raw)
+    except (ValueError, TypeError):
+        return serialization.load_der_public_key(raw)

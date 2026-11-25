@@ -15,6 +15,8 @@ class ServiceCategory(models.Model):
     name = models.CharField(max_length=50, db_comment="服务类目展示名称")
     sort_order = models.PositiveIntegerField(default=0, db_comment="类目展示排序值")
     is_active = models.BooleanField(default=True, db_comment="类目是否允许选择")
+    version = models.PositiveIntegerField(default=1, db_comment="类目配置乐观锁版本号")
+    version = models.PositiveIntegerField(default=1, db_comment="类目配置乐观锁版本号")
     created_at = models.DateTimeField(auto_now_add=True, db_comment="类目创建时间")
     updated_at = models.DateTimeField(auto_now=True, db_comment="类目最近更新时间")
 

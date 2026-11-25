@@ -21,6 +21,7 @@ from backend.common.crypto import (
     hash_sensitive_text,
     sensitive_fingerprint,
 )
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.payouts.adapters import get_payout_channel, get_payout_verifier
@@ -135,9 +136,19 @@ def payout_method_payload(method: PayoutMethod) -> dict[str, Any]:
     return {
         "id": str(method.public_id),
         "method_type": method.method_type,
+        "method_type_text": enum_label(PayoutMethod.MethodType, method.method_type),
         "binding_mode": method.binding_mode,
+        "binding_mode_text": enum_label(
+            PayoutMethod.BindingMode,
+            method.binding_mode,
+        ),
         "status": method.status,
+        "status_text": enum_label(PayoutMethod.Status, method.status),
         "verification_status": method.verification_status,
+        "verification_status_text": enum_label(
+            PayoutMethod.VerificationStatus,
+            method.verification_status,
+        ),
         "is_default": method.is_default,
         "account_name_masked": method.account_name_masked,
         "account_number_masked": method.account_number_masked,
@@ -402,6 +413,10 @@ def get_or_create_earning_account(
 def _earning_account_payload(account: EarningAccount) -> dict[str, Any]:
     return {
         "account_type": account.account_type,
+        "account_type_text": enum_label(
+            EarningAccount.AccountType,
+            account.account_type,
+        ),
         "currency": account.currency,
         "available_amount_minor": account.available_amount_minor,
         "frozen_amount_minor": account.frozen_amount_minor,
@@ -724,6 +739,10 @@ def earning_account_payload(
     account_type: str,
 ) -> dict[str, Any]:
     """查询并返回当前用户指定收益账户汇总。"""
+    if account_type == EarningAccount.AccountType.REFERRAL_REWARD:
+        from backend.referrals.reward_services import settle_due_referral_rewards
+
+        settle_due_referral_rewards(limit=200)
 
     account = get_or_create_earning_account(user=user, account_type=account_type)
     with transaction.atomic():
@@ -759,6 +778,7 @@ def list_earning_entries(
                 "platform_fee_amount_minor": entry.platform_fee_amount_minor,
                 "net_amount_minor": entry.net_amount_minor,
                 "status": entry.status,
+                "status_text": enum_label(EarningEntry.Status, entry.status),
                 "available_at": entry.available_at,
                 "settled_at": entry.settled_at,
                 "created_at": entry.created_at,
@@ -793,7 +813,15 @@ def list_earning_transactions(
             {
                 "transaction_no": str(item.transaction_no),
                 "direction": item.direction,
+                "direction_text": enum_label(
+                    EarningTransaction.Direction,
+                    item.direction,
+                ),
                 "transaction_type": item.transaction_type,
+                "transaction_type_text": enum_label(
+                    EarningTransaction.TransactionType,
+                    item.transaction_type,
+                ),
                 "business_type": item.business_type,
                 "business_no": item.business_no,
                 "currency": item.currency,
@@ -817,14 +845,23 @@ def withdrawal_payload(withdrawal: Withdrawal) -> dict[str, Any]:
     return {
         "withdrawal_no": str(withdrawal.withdrawal_no),
         "account_type": withdrawal.account.account_type,
+        "account_type_text": enum_label(
+            EarningAccount.AccountType,
+            withdrawal.account.account_type,
+        ),
         "currency": withdrawal.currency,
         "amount_minor": withdrawal.amount_minor,
         "fee_amount_minor": withdrawal.fee_amount_minor,
         "payout_amount_minor": withdrawal.payout_amount_minor,
         "status": withdrawal.status,
+        "status_text": enum_label(Withdrawal.Status, withdrawal.status),
         "payout_method": {
             "id": str(withdrawal.payout_method.public_id),
             "method_type": withdrawal.payout_method.method_type,
+            "method_type_text": enum_label(
+                PayoutMethod.MethodType,
+                withdrawal.payout_method.method_type,
+            ),
             "display_text": withdrawal.payout_method_display,
         },
         "review_note": withdrawal.review_note,

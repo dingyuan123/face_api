@@ -15,4 +15,6 @@ cryptography>=42,<46
 PyJWT[crypto]>=2.10,<3
 Pillow>=11,<13
 qrcode>=7.4,<9
+alibabacloud_dysmsapi20170525>=2.0.2,<3
+alibabacloud_tea_openapi>=0.3.13,<1
 

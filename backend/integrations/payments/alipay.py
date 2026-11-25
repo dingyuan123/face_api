@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
 from django.conf import settings
 
@@ -23,7 +23,56 @@ from backend.integrations.payments.contracts import (
     PaymentNotification,
     RefundResult,
 )
-from backend.integrations.payments.crypto import amount_to_yuan, load_public_key, yuan_to_minor
+from backend.integrations.payments.crypto import (
+    amount_to_yuan,
+    load_private_key,
+    load_public_key,
+    yuan_to_minor,
+)
+
+logger = logging.getLogger("jianmianliao.payment.alipay")
+
+
+def _decode_response_text(raw: bytes, charset: str | None) -> str:
+    """按支付宝响应编码解码，兼容错误页返回 GBK 的情况。"""
+    try:
+        return raw.decode(charset or "utf-8")
+    except (LookupError, UnicodeDecodeError):
+        return raw.decode("gb18030", errors="replace")
+
+
+def _safe_request_summary(biz_content: dict[str, Any]) -> dict[str, Any]:
+    """返回可记录的支付宝请求摘要，不输出签名、密钥或完整订单串。"""
+    fields = (
+        "out_trade_no",
+        "out_request_no",
+        "refund_no",
+        "total_amount",
+        "refund_amount",
+        "product_code",
+    )
+    return {field: biz_content[field] for field in fields if field in biz_content}
+
+
+def _safe_response_summary(value: Any) -> dict[str, Any]:
+    """返回支付宝响应的错误码和交易摘要，不输出签名或个人敏感字段。"""
+    if not isinstance(value, dict):
+        return {"response_type": type(value).__name__}
+    fields = (
+        "code",
+        "msg",
+        "sub_code",
+        "sub_msg",
+        "trace_id",
+        "trade_status",
+        "out_trade_no",
+        "out_request_no",
+        "refund_no",
+        "trade_no",
+        "total_amount",
+        "refund_amount",
+    )
+    return {field: value[field] for field in fields if field in value}
 
 
 class AlipayGateway(PaymentGateway):
@@ -47,6 +96,16 @@ class AlipayGateway(PaymentGateway):
         params["notify_url"] = settings.ALIPAY_NOTIFY_URL
         params["sign"] = self._sign(params)
         order_string = urllib.parse.urlencode(params)
+        logger.info(
+            "支付宝 App 支付参数已生成",
+            extra={
+                "payment_provider": "ALIPAY",
+                "api_method": "alipay.trade.app.pay",
+                "payment_no": payment_no,
+                "amount_minor": amount_minor,
+                "sign_type": params["sign_type"],
+            },
+        )
         return PaymentInitiation(
             channel_reference=f"alipay-{payment_no}",
             client_payload={"order_string": order_string},
@@ -70,6 +129,16 @@ class AlipayGateway(PaymentGateway):
             },
         )
         response = result.get("alipay_trade_refund_response", result)
+        logger.info(
+            "支付宝退款接口处理完成",
+            extra={
+                "payment_provider": "ALIPAY",
+                "api_method": "alipay.trade.refund",
+                "payment_no": payment_no,
+                "refund_no": refund_no,
+                "alipay_response": _safe_response_summary(response),
+            },
+        )
         if response.get("code") == "10000":
             status = "SUCCESS"
             channel_status = "REFUND_SUCCESS"
@@ -113,7 +182,7 @@ class AlipayGateway(PaymentGateway):
             if refund_no
             else channel_status == "TRADE_SUCCESS"
         )
-        return PaymentNotification(
+        notification = PaymentNotification(
             event_type="REFUND.NOTIFY" if refund_no else "TRADE.NOTIFY",
             out_trade_no=str(form_data.get("out_trade_no", "")),
             transaction_no=str(form_data.get("trade_no", "")),
@@ -124,12 +193,33 @@ class AlipayGateway(PaymentGateway):
             channel_status=channel_status,
             refund_no=refund_no,
         )
+        logger.info(
+            "支付宝异步通知验证完成",
+            extra={
+                "payment_provider": "ALIPAY",
+                "event_type": notification.event_type,
+                "out_trade_no": notification.out_trade_no,
+                "transaction_no": notification.transaction_no,
+                "refund_no": notification.refund_no,
+                "channel_status": notification.channel_status,
+                "notification_success": notification.success,
+            },
+        )
+        return notification
 
     def _request(self, method: str, biz_content: dict[str, Any]) -> dict[str, Any]:
         """调用支付宝网关并验证业务响应签名，不打印商户密钥。"""
         self._validate_config()
         params = self._common_params(method, biz_content)
         params["sign"] = self._sign(params)
+        logger.info(
+            "支付宝接口开始请求",
+            extra={
+                "payment_provider": "ALIPAY",
+                "api_method": method,
+                "alipay_request": _safe_request_summary(biz_content),
+            },
+        )
         request = urllib.request.Request(
             settings.ALIPAY_GATEWAY_URL,
             data=urllib.parse.urlencode(params).encode(),
@@ -144,13 +234,67 @@ class AlipayGateway(PaymentGateway):
                 request,
                 timeout=settings.ALIPAY_TIMEOUT_SECONDS,
             ) as response:
-                result = json.loads(response.read().decode("utf-8"))
+                raw_response = response.read()
+                response_text = _decode_response_text(
+                    raw_response,
+                    response.headers.get_content_charset(),
+                )
+                result = json.loads(response_text)
         except urllib.error.HTTPError as exc:
+            detail = _decode_response_text(
+                exc.read(),
+                exc.headers.get_content_charset(),
+            )[:500]
+            logger.warning(
+                "支付宝接口返回 HTTP 错误",
+                extra={
+                    "payment_provider": "ALIPAY",
+                    "api_method": method,
+                    "alipay_http_status": exc.code,
+                    "alipay_response": detail,
+                },
+            )
             raise PaymentGatewayError("支付宝请求被拒绝") from exc
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            logger.warning(
+                "支付宝接口网络不可用",
+                extra={
+                    "payment_provider": "ALIPAY",
+                    "api_method": method,
+                    "error_type": type(exc).__name__,
+                },
+            )
             raise PaymentGatewayUnavailable("支付宝网络服务不可用") from exc
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            logger.warning(
+                "支付宝接口响应格式不正确",
+                extra={
+                    "payment_provider": "ALIPAY",
+                    "api_method": method,
+                    "error_type": type(exc).__name__,
+                },
+            )
+            raise PaymentGatewayError("支付宝响应格式不正确") from exc
         response_data = result.get(f"{method.replace('.', '_')}_response")
+        logger.info(
+            "支付宝接口返回响应",
+            extra={
+                "payment_provider": "ALIPAY",
+                "api_method": method,
+                "alipay_response": _safe_response_summary(
+                    response_data if isinstance(response_data, dict) else result
+                ),
+            },
+        )
         if isinstance(response_data, dict) and response_data.get("code") != "10000":
+            logger.warning(
+                "支付宝接口返回业务错误",
+                extra={
+                    "payment_provider": "ALIPAY",
+                    "api_method": method,
+                    "alipay_response": _safe_response_summary(response_data),
+                },
+            )
             raise PaymentGatewayError(
                 str(response_data.get("sub_msg") or response_data.get("msg") or "支付宝业务失败")
             )
@@ -166,6 +310,14 @@ class AlipayGateway(PaymentGateway):
                 separators=(",", ":"),
             )
             if not self._verify_text(serialized, str(result["sign"])):
+                logger.warning(
+                    "支付宝接口响应验签失败",
+                    extra={
+                        "payment_provider": "ALIPAY",
+                        "api_method": method,
+                        "alipay_response": _safe_response_summary(response_data),
+                    },
+                )
                 raise PaymentGatewayError("支付宝响应签名验证失败")
         del response_params
         return result
@@ -197,7 +349,7 @@ class AlipayGateway(PaymentGateway):
         content = "&".join(
             f"{key}={value}"
             for key, value in sorted(params.items())
-            if key not in {"sign", "sign_type"} and value not in {"", None}
+            if key != "sign" and value not in {"", None}
         )
         return self._sign_text(content)
 
@@ -231,11 +383,8 @@ class AlipayGateway(PaymentGateway):
 
     def _private_key(self) -> Any:
         try:
-            return serialization.load_pem_private_key(
-                _key_material(settings.ALIPAY_PRIVATE_KEY),
-                password=None,
-            )
-        except (ValueError, TypeError) as exc:
+            return load_private_key(settings.ALIPAY_PRIVATE_KEY)
+        except PaymentGatewayUnavailable as exc:
             raise PaymentGatewayUnavailable("支付宝商户私钥配置无效") from exc
 
     def _validate_config(self) -> None:
@@ -247,12 +396,3 @@ class AlipayGateway(PaymentGateway):
         ]
         if not all(required):
             raise PaymentGatewayUnavailable("支付宝配置不完整")
-
-
-def _key_material(value: str) -> bytes:
-    """兼容 PEM 文件路径与环境变量中的转义 PEM 内容。"""
-    normalized = value.strip()
-    candidate = Path(normalized)
-    if candidate.is_file():
-        return candidate.read_bytes()
-    return normalized.replace("\\n", "\n").encode()

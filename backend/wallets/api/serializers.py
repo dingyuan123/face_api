@@ -19,7 +19,9 @@ class WalletTransactionResponseSerializer(serializers.Serializer):
 
     transaction_no = serializers.UUIDField(help_text="钱包流水 UUID")
     direction = serializers.CharField(help_text="资金方向，CREDIT 或 DEBIT")
+    direction_text = serializers.CharField(help_text="资金方向中文含义")
     transaction_type = serializers.CharField(help_text="交易类型")
+    transaction_type_text = serializers.CharField(help_text="交易类型中文含义")
     business_type = serializers.CharField(help_text="关联业务类型")
     business_no = serializers.CharField(help_text="关联业务单号")
     currency = serializers.CharField(help_text="币种")

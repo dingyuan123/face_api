@@ -17,6 +17,7 @@ from django.utils import timezone
 from backend.accounts.models import User
 from backend.catalog.services import get_public_service_payload
 from backend.common.context import current_trace_id
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.content.news_models import (
@@ -347,6 +348,7 @@ def _attachment_payload(
 ) -> dict[str, Any]:
     return {
         "type": attachment.type,
+        "type_text": enum_label(NewsArticleAttachment.Type, attachment.type),
         "media": media_payloads.get(str(attachment.media_id)) if attachment.media_id else None,
         "url": attachment.url,
         "title": attachment.title,
@@ -360,6 +362,10 @@ def _mount_payload(
 ) -> dict[str, Any]:
     return {
         "mount_type": mount.mount_type,
+        "mount_type_text": enum_label(
+            NewsArticleMount.MountType,
+            mount.mount_type,
+        ),
         "target_public_id": str(mount.target_public_id) if mount.target_public_id else None,
         "title": mount.title,
         "subtitle": mount.subtitle,
@@ -411,11 +417,20 @@ def news_payload(
         "city_code": article.city_code,
         "language_code": article.language_code,
         "category_codes": _category_codes(article),
+        "categories": [
+            {
+                "code": link.category.code,
+                "name": link.category.name,
+                "sort_order": link.category.sort_order,
+            }
+            for link in article.category_links.select_related("category")
+        ],
         "attachments": [
             _attachment_payload(item, media_payloads) for item in article.attachments.all()
         ],
         "mounts": [_mount_payload(item, media_payloads) for item in article.mounts.all()],
         "status": article.status,
+        "status_text": enum_label(NewsArticle.Status, article.status),
         "is_featured": article.is_featured,
         "allow_recommend": article.allow_recommend,
         "view_count": article.view_count,
@@ -812,6 +827,7 @@ def news_source_payload(source: NewsSource) -> dict[str, Any]:
         "code": source.code,
         "name": source.name,
         "source_type": source.source_type,
+        "source_type_text": enum_label(NewsSource.SourceType, source.source_type),
         "feed_url": source.feed_url,
         "homepage_url": source.homepage_url,
         "country_code": source.country_code,
@@ -895,6 +911,7 @@ def news_sync_run_payload(run: NewsSyncRun) -> dict[str, Any]:
     return {
         "run_no": str(run.run_no),
         "status": run.status,
+        "status_text": enum_label(NewsSyncRun.Status, run.status),
         "source_codes": run.source_codes,
         "filters": run.filters,
         "fetched_count": run.fetched_count,

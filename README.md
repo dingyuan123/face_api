@@ -294,6 +294,72 @@ IntegrityError: null value in column "phone_hash" of relation "auth_login_reques
 
 分别检查 PostgreSQL 和 Redis。`/api/v1/health/live/` 只检查进程存活，不代表数据库和 Redis 已连接。
 
+### 宝塔 Nginx 反向代理后 `/ws/messages/` 返回 `404`
+
+这是 WebSocket 反向代理常见的坑：票据接口可以正常返回，但 WebSocket 握手请求到 Django 后变成普通
+`GET` 请求，最终被 WebSocket 路由拒绝，日志可能显示：
+
+```text
+GET /ws/messages/?ticket=...
+status_code: 404
+```
+
+这通常不是聊天接口路径写错，也不是票据本身的问题，而是 Nginx 没有把 WebSocket 的
+`Upgrade` / `Connection` 请求头转发给 Daphne。浏览器和 App 发起 WebSocket 连接时必须完成
+HTTP 协议升级，否则后端收到的只是普通 HTTP 请求。
+
+在 `/www/server/nginx/conf/nginx.conf` 的 `http {}` 块中添加连接升级映射：
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+```
+
+然后在宝塔网站的反向代理配置中，给 `location /` 增加 WebSocket 转发配置；原有的
+`Host`、`X-Real-IP` 和 `X-Forwarded-*` 配置保留：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8000;
+    proxy_http_version 1.1;
+
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+修改后检查并重载 Nginx：
+
+```bash
+nginx -t
+nginx -s reload
+```
+
+验证时必须使用新获取的一次性票据，并带上 WebSocket 握手请求头：
+
+```bash
+curl -i -N \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  "https://你的域名/ws/messages/?ticket=<新票据>"
+```
+
+目标响应是 `101 Switching Protocols`。票据默认 60 秒过期且只能使用一次，重复使用旧票据
+不能用来判断代理配置是否正确。没有带 `Upgrade: websocket` 请求头时返回 `404` 是正常现象，
+因为该地址只接受 WebSocket 握手。若直接访问 `http://127.0.0.1:8000/ws/messages/` 能握手成功，
+而通过域名仍返回 `404`，问题就在 Nginx、Cloudflare Tunnel 或其他中间代理的 WebSocket 转发。
+
 ## 项目文档
 
 - 架构说明：`docs/architecture.md`

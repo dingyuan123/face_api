@@ -19,6 +19,7 @@ from django.utils import timezone
 
 from backend.accounts.models import User
 from backend.common.context import current_trace_id
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.media.models import MediaAsset
@@ -160,6 +161,7 @@ def _order_summary(order: Order, request: HttpRequest | None = None) -> dict[str
     return {
         "order_no": str(order.order_no),
         "status": order.status,
+        "status_text": enum_label(Order.Status, order.status),
         "service_title": snapshot.get("title") or (order.service.title if order.service else ""),
         "cover_media": cover_media[0] if cover_media else None,
     }
@@ -188,7 +190,12 @@ def _message_payload(
         "sequence": message.sequence,
         "sender_public_id": str(message.sender.public_id) if message.sender_id else None,
         "sender_role": message.sender_role,
+        "sender_role_text": enum_label(
+            ConversationMember.Role,
+            message.sender_role,
+        ),
         "message_type": message.message_type,
+        "message_type_text": enum_label(Message.MessageType, message.message_type),
         "content": message.content,
         "media": media_payloads[0] if media_payloads else None,
         "client_message_id": message.client_message_id,
@@ -688,6 +695,7 @@ def conversation_detail(
             _user_summary(order.provider_user, request),
         ],
         "status": conversation.status,
+        "status_text": enum_label(Conversation.Status, conversation.status),
         "can_send": conversation.status == Conversation.Status.OPEN,
         "close_reason": conversation.close_reason,
         "latest_sequence": latest_sequence,

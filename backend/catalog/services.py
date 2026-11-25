@@ -24,6 +24,7 @@ from backend.catalog.models import (
 )
 from backend.common.context import current_trace_id
 from backend.common.crypto import sensitive_fingerprint
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.media.services import (
@@ -43,6 +44,25 @@ class ServiceUpdateResult:
     service: ProviderService
     changed: bool
     reused: bool = False
+
+
+def service_category_payload(category: ServiceCategory) -> dict[str, Any]:
+    """返回服务类目代码和中文展示信息。"""
+    return {
+        "code": category.code,
+        "name": category.name,
+        "sort_order": category.sort_order,
+    }
+
+
+def service_tag_payload(tag: ServiceTag) -> dict[str, Any]:
+    """返回服务标签代码、分类和中文展示信息。"""
+    return {
+        "code": tag.code,
+        "name": tag.name,
+        "category": tag.category,
+        "sort_order": tag.sort_order,
+    }
 
 
 def _invalid(field: str, message: str) -> ApiError:
@@ -173,11 +193,13 @@ def _service_payload(
 ) -> dict[str, Any]:
     gallery_ids = [link.media_id for link in service.gallery_links.all().order_by("position", "id")]
     cover_media = get_media_payloads([service.cover_media_id], request)
+    tag_links = list(service.tag_links.select_related("tag").order_by("position", "id"))
     return {
         "id": str(service.public_id),
         "version": service.version,
         "title": service.title,
         "category_code": service.category.code,
+        "category": service_category_payload(service.category),
         "pricing_unit": "HOUR",
         "price": {
             "currency": service.currency,
@@ -191,9 +213,11 @@ def _service_payload(
         "introduction": service.introduction,
         "cover_media": cover_media[0] if cover_media else None,
         "gallery_media": get_media_payloads(gallery_ids, request),
-        "tag_codes": [link.tag.code for link in service.tag_links.all().order_by("position", "id")],
+        "tag_codes": [link.tag.code for link in tag_links],
+        "tags": [service_tag_payload(link.tag) for link in tag_links],
         "location_type": service.location_type,
         "status": service.status,
+        "status_text": enum_label(ProviderService.Status, service.status),
         "reject_reason": service.reject_reason,
         "sold_count": service.sold_count,
         "updated_at": service.updated_at,

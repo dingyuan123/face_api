@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from backend.catalog.api.serializers import MoneySerializer
+from backend.catalog.api.serializers import (
+    MoneySerializer,
+    ServiceCategoryResponseSerializer,
+    ServiceTagResponseSerializer,
+)
 from backend.media.api.serializers import MediaAssetSummarySerializer
 
 
@@ -126,6 +130,7 @@ class OrderServiceResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(help_text="下单时或当前服务版本号")
     title = serializers.CharField(help_text="服务名称")
     category_code = serializers.CharField(help_text="服务类目代码")
+    category = ServiceCategoryResponseSerializer(help_text="服务类目代码和中文展示信息")
     pricing_unit = serializers.CharField(help_text="计价单位，当前固定为 HOUR")
     price = MoneySerializer(help_text="服务每小时价格")
     price_display = serializers.CharField(help_text="只读每小时价格展示字符串")
@@ -143,8 +148,13 @@ class OrderServiceResponseSerializer(serializers.Serializer):
         child=serializers.CharField(),
         help_text="服务标签代码",
     )
+    tags = ServiceTagResponseSerializer(
+        many=True,
+        help_text="服务标签代码、名称和分类",
+    )
     location_type = serializers.CharField(help_text="服务地点类型")
     status = serializers.CharField(help_text="服务当前状态或历史快照状态")
+    status_text = serializers.CharField(help_text="服务状态或历史快照状态中文含义")
 
 
 class OrderCustomerParticipantSerializer(serializers.Serializer):
@@ -186,7 +196,7 @@ class OrderContactSerializer(serializers.Serializer):
     """当前登录者联系订单对方的信息。"""
 
     target_role = serializers.ChoiceField(
-        choices=["USER", "PROVIDER"],
+        choices=["USER", "PROVIDER", "ADMIN"],
         help_text="联系目标角色",
     )
     target_name = serializers.CharField(allow_null=True, help_text="联系目标昵称")
@@ -288,6 +298,7 @@ class PaymentResponseSerializer(serializers.Serializer):
         choices=["BALANCE", "WECHAT_APP", "ALIPAY_APP"],
         help_text="支付方式",
     )
+    payment_method_text = serializers.CharField(help_text="支付方式中文含义")
     payment_channel = serializers.CharField(help_text="支付渠道代码")
     currency = serializers.CharField(help_text="支付币种")
     amount_minor = serializers.IntegerField(help_text="支付金额，单位为分")
@@ -295,6 +306,7 @@ class PaymentResponseSerializer(serializers.Serializer):
         choices=["PENDING", "SUCCESS", "FAILED", "CLOSED", "REFUNDED"],
         help_text="支付单状态",
     )
+    status_text = serializers.CharField(help_text="支付单状态中文含义")
     client_payload = serializers.DictField(
         help_text="微信或支付宝原生 SDK 调起参数；余额支付为空对象"
     )
@@ -363,6 +375,10 @@ class OrderRefundRequestSerializer(serializers.Serializer):
     reason = serializers.CharField(help_text="用户退款申请原因")
     currency = serializers.CharField(help_text="退款币种")
     refund_amount_minor = serializers.IntegerField(help_text="全额退款金额，单位为币种最小单位")
+    approved_refund_amount_minor = serializers.IntegerField(
+        allow_null=True,
+        help_text="管理员同意的实际退款金额，单位为分",
+    )
     review_note = serializers.CharField(help_text="后台审核说明")
     reviewed_at = serializers.DateTimeField(
         allow_null=True,
@@ -391,6 +407,11 @@ class OrderRefundReviewRequestSerializer(serializers.Serializer):
         help_text="退款申请当前版本号",
     )
     review_note = serializers.CharField(help_text="审核说明，2 到 500 个字符")
+    refund_amount_minor = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        help_text="本次同意退款金额，可小于申请金额实现部分退款",
+    )
 
 
 class OrderRefundRetryRequestSerializer(serializers.Serializer):

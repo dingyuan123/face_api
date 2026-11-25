@@ -15,10 +15,11 @@ from django.http import HttpRequest
 from django.utils import timezone
 
 from backend.accounts.models import User
-from backend.catalog.models import ProviderService
+from backend.catalog.models import ProviderService, ServiceCategory, ServiceTag
 from backend.catalog.services import format_price_amount, service_payload
 from backend.common.context import current_trace_id
 from backend.common.crypto import decrypt_text, sensitive_fingerprint
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.locations.services import decode_location_selection_token
@@ -258,11 +259,20 @@ def _order_service_payload(
         "hourly_amount_minor",
         snapshot.get("price_amount_minor", 0),
     )
+    category = ServiceCategory.objects.filter(code=snapshot.get("category_code", "")).first()
+    tag_codes = snapshot.get("tag_codes", [])
+    tags = ServiceTag.objects.filter(code__in=tag_codes).in_bulk(field_name="code")
+    status = snapshot.get("status", "HISTORICAL")
     return {
         "id": snapshot.get("id", snapshot.get("service_id")),
         "version": snapshot.get("version", 0),
         "title": snapshot.get("title", ""),
         "category_code": snapshot.get("category_code", ""),
+        "category": {
+            "code": snapshot.get("category_code", ""),
+            "name": category.name if category else None,
+            "sort_order": category.sort_order if category else 0,
+        },
         "pricing_unit": snapshot.get("pricing_unit", "HOUR"),
         "price": {
             "currency": currency,
@@ -273,9 +283,19 @@ def _order_service_payload(
         "introduction": snapshot.get("introduction", ""),
         "cover_media": cover_media[0] if cover_media else None,
         "gallery_media": gallery_media,
-        "tag_codes": snapshot.get("tag_codes", []),
+        "tag_codes": tag_codes,
+        "tags": [
+            {
+                "code": code,
+                "name": tags[code].name if code in tags else None,
+                "category": tags[code].category if code in tags else "",
+                "sort_order": tags[code].sort_order if code in tags else 0,
+            }
+            for code in tag_codes
+        ],
         "location_type": snapshot.get("location_type", "PUBLIC_PLACE"),
-        "status": snapshot.get("status", "HISTORICAL"),
+        "status": status,
+        "status_text": enum_label(ProviderService.Status, status, "历史快照"),
     }
 
 
@@ -371,6 +391,21 @@ def _meeting_location_payload(order: Order) -> dict[str, Any] | None:
 def _contact_payload(order: Order, viewer: User) -> dict[str, Any]:
     """返回当前登录者可联系的订单对方电话和按钮文案。"""
 
+    if viewer.is_staff:
+        target_user = order.provider_user
+        return {
+            "target_role": "ADMIN",
+            "target_name": getattr(
+                getattr(target_user, "provider_profile", None),
+                "nickname",
+                None,
+            ),
+            "phone_display": target_user.phone_masked,
+            "phone_dial": None,
+            "tel_uri": None,
+            "can_call": False,
+            "action_label": "仅订单参与人可联系",
+        }
     if viewer.id == order.user_id:
         target_role = "PROVIDER"
         target_user = order.provider_user
@@ -379,8 +414,8 @@ def _contact_payload(order: Order, viewer: User) -> dict[str, Any]:
         target_user = order.user
     else:
         raise ApiError(
-            ErrorCode.AUTH_PERMISSION_DENIED,
-            ERROR_MESSAGES[ErrorCode.AUTH_PERMISSION_DENIED],
+            ErrorCode.PERMISSION_DENIED,
+            ERROR_MESSAGES[ErrorCode.PERMISSION_DENIED],
             status_code=403,
         )
     target_profile = (
@@ -1099,6 +1134,7 @@ def cancel_order(
     order_no: str,
     expected_version: int,
     reason: str = "",
+    actor_user_id: int | None = None,
 ) -> Order:
     """用户取消订单，未支付直接取消，已支付原路退回余额。"""
 
@@ -1143,11 +1179,15 @@ def cancel_order(
                 order=order,
                 event_type=OrderStatusLog.EventType.CANCELED,
                 from_status=previous_status,
-                actor_user_id=user.id,
+                actor_user_id=actor_user_id or user.id,
                 reason=reason,
             )
             return order
-        _refund_and_release(order=order, actor_user_id=user.id, reason=reason)
+        _refund_and_release(
+            order=order,
+            actor_user_id=actor_user_id or user.id,
+            reason=reason,
+        )
         return order
 
 
@@ -1361,6 +1401,7 @@ def _refund_request_payload(request: OrderRefundRequest) -> dict[str, Any]:
         "reason": request.reason,
         "currency": request.currency,
         "refund_amount_minor": request.refund_amount_minor,
+        "approved_refund_amount_minor": request.approved_refund_amount_minor,
         "review_note": request.review_note,
         "reviewed_at": request.reviewed_at,
         "failure_reason": request.failure_reason,
@@ -1570,6 +1611,7 @@ def approve_order_refund_request(
     request_no: str,
     expected_version: int,
     review_note: str,
+    refund_amount_minor: int | None = None,
 ) -> dict[str, Any]:
     """后台同意退款，先登记退款单，再在事务外执行原渠道退款。"""
 
@@ -1599,6 +1641,18 @@ def approve_order_refund_request(
                 ERROR_MESSAGES[ErrorCode.REFUND_REQUEST_VERSION_CONFLICT],
                 status_code=409,
             )
+        approved_amount = (
+            refund_request.refund_amount_minor
+            if refund_amount_minor is None
+            else refund_amount_minor
+        )
+        if approved_amount <= 0 or approved_amount > refund_request.refund_amount_minor:
+            raise ApiError(
+                ErrorCode.REFUND_REQUEST_INVALID,
+                "审核退款金额必须大于 0 且不超过申请金额",
+                status_code=400,
+                details={"refund_amount_minor": "退款金额不正确"},
+            )
         order = refund_request.order
         payment, eligibility_error = _refund_request_eligibility(order)
         if eligibility_error or payment is None:
@@ -1610,10 +1664,11 @@ def approve_order_refund_request(
             )
         payment_refund = register_refund(
             payment=payment,
-            refund_amount_minor=refund_request.refund_amount_minor,
+            refund_amount_minor=approved_amount,
             idempotency_key=f"order-refund-request:{refund_request.request_no}",
         )
         refund_request.status = OrderRefundRequest.Status.PROCESSING
+        refund_request.approved_refund_amount_minor = approved_amount
         refund_request.reviewed_by_user_id = admin_user.id
         refund_request.review_note = normalized_note
         refund_request.reviewed_at = timezone.now()
@@ -1623,6 +1678,7 @@ def approve_order_refund_request(
         refund_request.save(
             update_fields=[
                 "status",
+                "approved_refund_amount_minor",
                 "reviewed_by_user_id",
                 "review_note",
                 "reviewed_at",
@@ -1673,14 +1729,15 @@ def apply_order_refund_result(*, refund: Refund) -> None:
                             "updated_at",
                         ]
                     )
-                    _release_schedule_slots(order)
-                    _record_event(
-                        order=order,
-                        event_type=OrderStatusLog.EventType.REFUNDED,
-                        from_status=previous_status,
-                        actor_user_id=refund_request.reviewed_by_user_id,
-                        reason=refund_request.review_note,
-                    )
+                    if order.refunded_amount_minor >= order.paid_amount_minor:
+                        _release_schedule_slots(order)
+                        _record_event(
+                            order=order,
+                            event_type=OrderStatusLog.EventType.REFUNDED,
+                            from_status=previous_status,
+                            actor_user_id=refund_request.reviewed_by_user_id,
+                            reason=refund_request.review_note,
+                        )
                     apply_refund_to_referral_reward(
                         order=order,
                         refund_no=str(refund.refund_no),

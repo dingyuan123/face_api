@@ -16,6 +16,7 @@ from backend.accounts.api.serializers import (
     InitialRoleResponseSerializer,
     LoginRequestSerializer,
     LogoutResponseSerializer,
+    PasswordLoginRequestSerializer,
     PhoneBindingRequestSerializer,
     PhoneBindingResponseSerializer,
     RefreshRequestSerializer,
@@ -255,6 +256,36 @@ class DevPasswordLoginView(APIView):
             phone_value=serializer.validated_data["phone"],
             password_value=serializer.validated_data["password"],
             idempotency_key=request.headers.get("Idempotency-Key"),
+        )
+        return Response(_token_payload(result))
+
+
+class PasswordLoginView(APIView):
+    """普通用户使用手机号和密码登录。"""
+
+    authentication_classes: ClassVar[list[type[BaseAuthentication]]] = []
+    permission_classes: ClassVar[list[type[BasePermission]]] = [AllowAny]
+
+    @extend_schema(
+        auth=[],
+        summary="账号密码登录",
+        description=(
+            "校验手机号和密码后返回与验证码登录一致的 TokenPairResponse；"
+            "连续密码错误会触发临时锁定，错误统一提示手机号或密码错误。"
+        ),
+        request=PasswordLoginRequestSerializer,
+        responses={200: TokenPairResponseSerializer},
+        parameters=[_idempotency_header()],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = PasswordLoginRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = login_with_password(
+            phone_value=serializer.validated_data["phone"],
+            password_value=serializer.validated_data["password"],
+            idempotency_key=request.headers.get("Idempotency-Key"),
+            referral_context=dict(serializer.validated_data.get("referral_context") or {}),
+            dev_only=False,
         )
         return Response(_token_payload(result))
 

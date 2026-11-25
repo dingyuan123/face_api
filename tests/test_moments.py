@@ -176,7 +176,9 @@ def test_provider_can_create_publish_and_query_image_moment() -> None:
     assert published.json()["data"]["provider"]["avatar_media"]["display_url"]
     assert published.json()["data"]["provider"]["verification"] == {
         "real_name_status": "NOT_SUBMITTED",
+        "real_name_status_text": "未提交",
         "face_status": "NOT_SUBMITTED",
+        "face_status_text": "未提交",
     }
     assert published.json()["data"]["attached_service"]["price"]["amount_minor"] == 6800
     assert public_list.status_code == 200

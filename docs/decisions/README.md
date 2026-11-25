@@ -69,4 +69,16 @@
 - `0042-identity-card-evidence-fields.md`：服务者申请和实名认证的身份证正反面资料边界。
 - `0043-test-management-review-dashboard.md`：开发测试管理后台总览和实名/服务者人工审核界面。
 - `0044-provider-dashboard-metrics.md`：服务者工作台指标、浏览事件和转化漏斗口径。
+- `0045-admin-v1-auth-rbac-audit.md`：Vue 管理后台独立令牌、权限点、审计和用户/服务者管理基础。
+- `0046-content-reports-and-sensitive-words.md`：内容举报、敏感词配置和管理员处理流程。
+- `0047-support-ticket-workspace.md`：独立客服工单、客服消息、分配处理和常见问题。
+- `0048-company-profile-admin-management.md`：管理后台公司简介、单例版本和营业执照媒体边界。
+- `0049-public-company-profile-api.md`：普通用户公开查询公司简介和短期营业执照地址。
+- `0050-code-and-display-label-responses.md`：状态、标签和审计代码与中文展示并列响应。
+- `0051-alipay-rsa2-sign-type-inclusion.md`：支付宝 RSA2 请求签名保留 `sign_type` 的官方 SDK 对齐修复。
+- `0052-account-deletion-lifecycle.md`：账号注销条件、验证码、个人数据清理和保留审计。
+- `0053-admin-force-deletion-and-balance-clear.md`：管理员清空低额余额并强制注销的资金审计边界。
+- `0054-account-security-phone-password.md`：账号密码设置、找回密码和更换绑定手机号流程。
+- `0055-apple-login-nonce-compatibility.md`：UniApp Apple 登录 nonce 兼容与安全权衡。
+- `0056-production-password-login.md`：正式账号密码登录、统一错误和失败次数锁定。
 

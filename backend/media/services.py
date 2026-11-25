@@ -21,6 +21,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from backend.accounts.models import User
 from backend.common.crypto import sensitive_fingerprint
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.media.models import MediaAsset
@@ -41,6 +42,7 @@ PROVIDER_PROFILE_PHOTO = MediaAsset.Purpose.PROVIDER_PROFILE_PHOTO
 PROVIDER_SERVICE_COVER = MediaAsset.Purpose.PROVIDER_SERVICE_COVER
 PROVIDER_SERVICE_GALLERY = MediaAsset.Purpose.PROVIDER_SERVICE_GALLERY
 MOMENT_IMAGE = MediaAsset.Purpose.MOMENT_IMAGE
+COMPANY_BUSINESS_LICENSE = MediaAsset.Purpose.COMPANY_BUSINESS_LICENSE
 
 
 @dataclass(frozen=True)
@@ -431,6 +433,9 @@ def media_payload(asset: MediaAsset, request: HttpRequest | None = None) -> dict
     return {
         "media_id": str(asset.public_id),
         "purpose": asset.purpose,
+        "purpose_text": enum_label(MediaAsset.Purpose, asset.purpose),
+        "status": asset.status,
+        "status_text": enum_label(MediaAsset.Status, asset.status),
         "content_type": asset.content_type,
         "byte_size": asset.byte_size,
         "width": asset.width,

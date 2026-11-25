@@ -12,6 +12,7 @@ from django.db.models import F
 from backend.accounts.models import User
 from backend.common.context import current_trace_id
 from backend.common.crypto import sensitive_fingerprint
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.wallets.models import WalletAccount, WalletTopUp, WalletTransaction
@@ -69,7 +70,15 @@ def wallet_transaction_payload(transaction: WalletTransaction) -> dict[str, Any]
     return {
         "transaction_no": str(transaction.transaction_no),
         "direction": transaction.direction,
+        "direction_text": enum_label(
+            WalletTransaction.Direction,
+            transaction.direction,
+        ),
         "transaction_type": transaction.transaction_type,
+        "transaction_type_text": enum_label(
+            WalletTransaction.TransactionType,
+            transaction.transaction_type,
+        ),
         "business_type": transaction.business_type,
         "business_no": transaction.business_no,
         "currency": transaction.currency,

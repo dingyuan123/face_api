@@ -33,6 +33,17 @@ class BearerTokenAuthentication(BaseAuthentication):
             .filter(token_hash=hash_token(raw_token), token_type=AuthToken.TokenType.ACCESS)
             .first()
         )
+        if token is None:
+            from backend.adminops.models import AdminAuthToken
+
+            token = (
+                AdminAuthToken.objects.select_related("user")
+                .filter(
+                    token_hash=hash_token(raw_token),
+                    token_type=AdminAuthToken.TokenType.ACCESS,
+                )
+                .first()
+            )
         if token is None or token.revoked_at is not None:
             raise AuthenticationFailed(
                 ERROR_MESSAGES[ErrorCode.AUTH_TOKEN_INVALID],

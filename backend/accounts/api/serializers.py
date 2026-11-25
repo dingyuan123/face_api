@@ -142,6 +142,23 @@ class DevPasswordLoginRequestSerializer(serializers.Serializer):
         return normalize_phone(value)
 
 
+class PasswordLoginRequestSerializer(serializers.Serializer):
+    """普通用户手机号和密码登录请求。"""
+
+    phone = serializers.CharField(max_length=20, help_text="已绑定的登录手机号")
+    password = serializers.CharField(
+        write_only=True,
+        help_text="登录密码；接口不返回或记录明文密码",
+    )
+    referral_context = ReferralContextSerializer(
+        required=False,
+        help_text="分享入口归因信息，仅用于登录请求一致性和后续归因",
+    )
+
+    def validate_phone(self, value: str) -> str:
+        return normalize_phone(value)
+
+
 class RefreshRequestSerializer(serializers.Serializer):
     """访问令牌刷新请求。"""
 
@@ -168,6 +185,7 @@ class SessionResponseSerializer(serializers.Serializer):
     user_public_id = serializers.UUIDField(help_text="对外用户标识")
     phone_masked = serializers.CharField(help_text="脱敏手机号")
     status = serializers.CharField(help_text="账号状态")
+    status_text = serializers.CharField(help_text="账号状态中文含义")
     requires_identity_selection = serializers.BooleanField(help_text="是否仍需选择首次身份")
     requires_phone_binding = serializers.BooleanField(help_text="是否仍需手动绑定手机号")
     auth_methods = serializers.ListField(
@@ -175,13 +193,23 @@ class SessionResponseSerializer(serializers.Serializer):
         help_text="已启用登录方式，例如 PHONE、WECHAT、APPLE",
     )
     primary_role = serializers.CharField(allow_null=True, help_text="当前主身份")
+    primary_role_text = serializers.CharField(
+        allow_null=True,
+        help_text="当前主身份中文含义",
+    )
     current_role = serializers.CharField(help_text="客户端当前应使用的身份")
+    current_role_text = serializers.CharField(help_text="客户端当前身份中文含义")
     roles = serializers.ListField(
         child=serializers.CharField(),
         help_text="当前可用身份列表，服务者审核通过后包含 USER 和 PROVIDER",
     )
     default_workspace = serializers.CharField(allow_null=True, help_text="默认工作区")
+    default_workspace_text = serializers.CharField(
+        allow_null=True,
+        help_text="默认工作区中文含义",
+    )
     provider_status = serializers.CharField(help_text="服务者审核状态")
+    provider_status_text = serializers.CharField(help_text="服务者审核状态中文含义")
     provider_application = ProviderApplicationResponseSerializer(
         allow_null=True,
         help_text="当前用户最新服务者申请摘要，包含临时图片展示地址",
@@ -214,12 +242,22 @@ class InitialRoleResponseSerializer(serializers.Serializer):
     """首次身份选择后的路由和状态响应。"""
 
     primary_role = serializers.CharField(allow_null=True, help_text="当前主身份")
+    primary_role_text = serializers.CharField(
+        allow_null=True,
+        help_text="当前主身份中文含义",
+    )
     current_role = serializers.CharField(help_text="客户端当前应使用的身份")
+    current_role_text = serializers.CharField(help_text="客户端当前身份中文含义")
     roles = serializers.ListField(
         child=serializers.CharField(),
         help_text="当前可用身份列表，服务者审核通过后包含 USER 和 PROVIDER",
     )
     default_workspace = serializers.CharField(allow_null=True, help_text="默认工作区")
+    default_workspace_text = serializers.CharField(
+        allow_null=True,
+        help_text="默认工作区中文含义",
+    )
     next_route = serializers.CharField(allow_null=True, help_text="客户端建议进入的工作区")
     requires_identity_selection = serializers.BooleanField(help_text="是否仍需选择首次身份")
     provider_status = serializers.CharField(help_text="服务者审核状态")
+    provider_status_text = serializers.CharField(help_text="服务者审核状态中文含义")

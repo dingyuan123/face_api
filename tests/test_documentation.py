@@ -6,12 +6,33 @@ from pathlib import Path
 
 import pytest
 
+from backend.accounts.api.deletion_serializers import (
+    AccountDeletionCheckItemSerializer,
+    AccountDeletionCheckResponseSerializer,
+    AccountDeletionConfirmRequestSerializer,
+    AccountDeletionResponseSerializer,
+    AccountDeletionSmsResponseSerializer,
+)
+from backend.accounts.api.security_serializers import (
+    AccountSecurityResponseSerializer,
+    PasswordChangeRequestSerializer,
+    PasswordChangeResponseSerializer,
+    PasswordForgotSmsRequestSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetResponseSerializer,
+    PhoneChangeConfirmRequestSerializer,
+    PhoneChangeConfirmResponseSerializer,
+    PhoneChangeRequestSerializer,
+    PhoneChangeResponseSerializer,
+    SecuritySmsResponseSerializer,
+)
 from backend.accounts.api.serializers import (
     DevPasswordLoginRequestSerializer,
     InitialRoleRequestSerializer,
     InitialRoleResponseSerializer,
     LoginRequestSerializer,
     LogoutResponseSerializer,
+    PasswordLoginRequestSerializer,
     RefreshRequestSerializer,
     SessionResponseSerializer,
     SmsCodeRequestSerializer,
@@ -19,13 +40,24 @@ from backend.accounts.api.serializers import (
     TokenPairResponseSerializer,
 )
 from backend.accounts.models import (
+    AccountDeletionRecord,
+    AccountSecurityEvent,
     AuthToken,
     LoginRequest,
+    PhoneChangeRequest,
     User,
     UserAuth,
     VerificationCode,
     VerificationSendGuard,
 )
+from backend.adminops.api.serializers import (
+    AdminCompanyLicenseUploadRequestSerializer,
+    AdminCompanyProfileResponseSerializer,
+    AdminCompanyProfileUpdateRequestSerializer,
+    PublicCompanyLicenseMediaSerializer,
+    PublicCompanyProfileResponseSerializer,
+)
+from backend.adminops.models import CompanyProfile
 from backend.catalog.api.serializers import (
     AdminServiceListResponseSerializer,
     AdminServiceProviderSerializer,
@@ -254,9 +286,11 @@ from backend.profiles.models import (
     UserProfileInterest,
 )
 from backend.providers.api.profile_serializers import (
+    ProviderCategoryDisplaySerializer,
     ProviderProfileInputSerializer,
     ProviderProfileResponseSerializer,
     ProviderProfileUpdateResponseSerializer,
+    ProviderTagDisplaySerializer,
 )
 from backend.providers.api.serializers import (
     ProviderApplicationInputSerializer,
@@ -345,6 +379,8 @@ from backend.wallets.models import WalletAccount, WalletTopUp, WalletTransaction
 CHINESE_PATTERN = re.compile(r"[\u4e00-\u9fff]")
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BUSINESS_MODULES = [
+    "backend/adminops/company_services.py",
+    "backend/adminops/display.py",
     "backend/accounts/services.py",
     "backend/accounts/authentication.py",
     "backend/identity/services.py",
@@ -379,9 +415,14 @@ BUSINESS_MODULES = [
     "backend/integrations/geo/coordinates.py",
     "backend/integrations/geo/tencent.py",
     "backend/common/crypto.py",
+    "backend/common/display.py",
     "backend/common/search.py",
 ]
 MODEL_CLASSES = [
+    CompanyProfile,
+    AccountDeletionRecord,
+    AccountSecurityEvent,
+    PhoneChangeRequest,
     User,
     UserAuth,
     VerificationSendGuard,
@@ -460,9 +501,31 @@ MODEL_CLASSES = [
     WithdrawalStatusLog,
 ]
 SERIALIZER_CLASSES = [
+    AccountSecurityResponseSerializer,
+    SecuritySmsResponseSerializer,
+    PasswordChangeRequestSerializer,
+    PasswordChangeResponseSerializer,
+    PasswordForgotSmsRequestSerializer,
+    PasswordResetRequestSerializer,
+    PasswordResetResponseSerializer,
+    PhoneChangeRequestSerializer,
+    PhoneChangeResponseSerializer,
+    PhoneChangeConfirmRequestSerializer,
+    PhoneChangeConfirmResponseSerializer,
+    AccountDeletionCheckItemSerializer,
+    AccountDeletionCheckResponseSerializer,
+    AccountDeletionConfirmRequestSerializer,
+    AccountDeletionSmsResponseSerializer,
+    AccountDeletionResponseSerializer,
+    AdminCompanyProfileResponseSerializer,
+    AdminCompanyProfileUpdateRequestSerializer,
+    AdminCompanyLicenseUploadRequestSerializer,
+    PublicCompanyProfileResponseSerializer,
+    PublicCompanyLicenseMediaSerializer,
     SmsCodeRequestSerializer,
     SmsCodeResponseSerializer,
     LoginRequestSerializer,
+    PasswordLoginRequestSerializer,
     DevPasswordLoginRequestSerializer,
     RefreshRequestSerializer,
     TokenPairResponseSerializer,
@@ -531,9 +594,11 @@ SERIALIZER_CLASSES = [
     HomeVerificationSerializer,
     HomeFeedItemSerializer,
     HomeFeedLocationRequestSerializer,
+    ProviderCategoryDisplaySerializer,
     ProviderProfileInputSerializer,
     ProviderProfileResponseSerializer,
     ProviderProfileUpdateResponseSerializer,
+    ProviderTagDisplaySerializer,
     MomentTagResponseSerializer,
     MomentCategoryResponseSerializer,
     MomentInputSerializer,

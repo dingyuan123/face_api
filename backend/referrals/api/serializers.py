@@ -52,8 +52,10 @@ class ShareLinkResponseSerializer(serializers.Serializer):
     share_no = serializers.UUIDField(help_text="分享链接 UUID")
     invite_code = serializers.CharField(help_text="专属邀请码")
     channel = serializers.CharField(help_text="分享渠道")
+    channel_text = serializers.CharField(help_text="分享渠道中文含义")
     campaign_code = serializers.CharField(help_text="运营活动代码")
     status = serializers.CharField(help_text="分享链接状态")
+    status_text = serializers.CharField(help_text="分享链接状态中文含义")
     share_url = serializers.CharField(help_text="带邀请归因参数的公开分享链接")
     created_at = serializers.DateTimeField(help_text="创建时间")
     expires_at = serializers.DateTimeField(allow_null=True, help_text="过期时间，可为空")
@@ -63,6 +65,7 @@ class RewardSummaryItemSerializer(serializers.Serializer):
     """奖励状态汇总项。"""
 
     status = serializers.CharField(help_text="奖励状态")
+    status_text = serializers.CharField(help_text="奖励状态中文含义")
     count = serializers.IntegerField(help_text="奖励数量")
     amount_minor = serializers.IntegerField(help_text="奖励金额合计，单位为分")
 
@@ -88,6 +91,7 @@ class RewardResponseSerializer(serializers.Serializer):
     reward_rate_bps = serializers.IntegerField(help_text="订单锁定奖励比例万分比")
     amount_minor = serializers.IntegerField(help_text="当前奖励金额，单位为分")
     status = serializers.CharField(help_text="奖励状态")
+    status_text = serializers.CharField(help_text="奖励状态中文含义")
     settle_after = serializers.DateTimeField(help_text="最早结算时间")
     settled_at = serializers.DateTimeField(allow_null=True, help_text="实际结算时间")
     cancel_reason = serializers.CharField(help_text="冻结或取消原因")
@@ -151,6 +155,7 @@ class ReferralPolicyResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(help_text="政策版本号")
     name = serializers.CharField(help_text="政策名称")
     status = serializers.CharField(help_text="政策状态")
+    status_text = serializers.CharField(help_text="政策状态中文含义")
     reward_rate_bps = serializers.IntegerField(help_text="奖励比例万分比")
     max_reward_amount_minor = serializers.IntegerField(
         allow_null=True,

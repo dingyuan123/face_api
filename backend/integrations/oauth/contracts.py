@@ -21,3 +21,4 @@ class OAuthIdentity:
     subject: str
     open_id: str | None = None
     union_id: str | None = None
+    nonce_verified: bool | None = None

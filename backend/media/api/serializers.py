@@ -10,7 +10,7 @@ class MediaUploadRequestSerializer(serializers.Serializer):
 
     purpose = serializers.ChoiceField(
         choices=MediaAsset.Purpose.choices,
-        help_text="媒体用途，包括用户资料、服务者资料、服务、动态和资讯图片",
+        help_text="媒体用途，包括用户资料、服务者资料、服务、动态、资讯和公司营业执照图片",
     )
     file = serializers.FileField(help_text="JPEG、PNG 或 WebP 图片文件")
 
@@ -20,6 +20,9 @@ class MediaAssetSummarySerializer(serializers.Serializer):
 
     media_id = serializers.UUIDField(help_text="媒体唯一标识")
     purpose = serializers.CharField(help_text="媒体用途")
+    purpose_text = serializers.CharField(help_text="媒体用途中文含义")
+    status = serializers.CharField(help_text="媒体状态")
+    status_text = serializers.CharField(help_text="媒体状态中文含义")
     content_type = serializers.CharField(help_text="服务端校验后的 MIME 类型")
     byte_size = serializers.IntegerField(help_text="规范化文件大小，单位为字节")
     width = serializers.IntegerField(help_text="图片宽度，单位为像素")

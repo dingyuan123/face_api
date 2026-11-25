@@ -22,6 +22,7 @@ class NewsAttachmentResponseSerializer(serializers.Serializer):
         choices=["IMAGE", "VIDEO", "LINK"],
         help_text="附件类型",
     )
+    type_text = serializers.CharField(help_text="附件类型中文含义")
     media = MediaAssetSummarySerializer(
         allow_null=True,
         help_text="平台图片媒体摘要；外部附件为空",
@@ -46,6 +47,7 @@ class NewsMountResponseSerializer(serializers.Serializer):
         choices=["PROVIDER", "SERVICE", "MERCHANT", "LINK"],
         help_text="挂载卡片类型",
     )
+    mount_type_text = serializers.CharField(help_text="挂载卡片类型中文含义")
     target_public_id = serializers.UUIDField(
         allow_null=True,
         help_text="服务者或服务公开 UUID；商家和纯链接为空",
@@ -87,12 +89,17 @@ class NewsArticleResponseSerializer(serializers.Serializer):
         child=serializers.CharField(),
         help_text="资讯类目代码列表",
     )
+    categories = NewsCategoryResponseSerializer(
+        many=True,
+        help_text="资讯类目代码和中文名称",
+    )
     attachments = NewsAttachmentResponseSerializer(
         many=True,
         help_text="资讯附件列表",
     )
     mounts = NewsMountResponseSerializer(many=True, help_text="资讯关联展示卡片")
     status = serializers.CharField(help_text="资讯状态")
+    status_text = serializers.CharField(help_text="资讯状态中文含义")
     is_featured = serializers.BooleanField(help_text="是否重点展示")
     allow_recommend = serializers.BooleanField(help_text="是否允许推荐")
     view_count = serializers.IntegerField(help_text="浏览次数")
@@ -326,6 +333,7 @@ class NewsSourceResponseSerializer(serializers.Serializer):
     code = serializers.CharField(help_text="来源稳定代码")
     name = serializers.CharField(help_text="来源展示名称")
     source_type = serializers.CharField(help_text="来源类型")
+    source_type_text = serializers.CharField(help_text="来源类型中文含义")
     feed_url = serializers.CharField(help_text="RSS 或 Atom 订阅地址")
     homepage_url = serializers.CharField(help_text="来源官网地址")
     country_code = serializers.CharField(help_text="来源国家或地区代码")
@@ -429,6 +437,7 @@ class NewsSyncRunResponseSerializer(serializers.Serializer):
 
     run_no = serializers.UUIDField(help_text="同步任务业务编号")
     status = serializers.CharField(help_text="同步任务状态")
+    status_text = serializers.CharField(help_text="同步任务状态中文含义")
     source_codes = serializers.ListField(
         child=serializers.CharField(),
         help_text="本次同步来源代码",

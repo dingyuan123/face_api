@@ -5,6 +5,10 @@ from rest_framework import serializers
 from backend.catalog.api.serializers import ServiceResponseSerializer
 from backend.content.api.serializers import MomentResponseSerializer
 from backend.media.api.serializers import MediaAssetSummarySerializer
+from backend.providers.api.profile_serializers import (
+    ProviderCategoryDisplaySerializer,
+    ProviderTagDisplaySerializer,
+)
 
 
 class ProviderPublicSummarySerializer(serializers.Serializer):
@@ -26,6 +30,14 @@ class ProviderPublicResponseSerializer(serializers.Serializer):
     provider = ProviderPublicSummarySerializer(help_text="服务者资料")
     category_codes = serializers.ListField(child=serializers.CharField(), help_text="服务类目代码")
     tag_codes = serializers.ListField(child=serializers.CharField(), help_text="服务者标签代码")
+    categories = ProviderCategoryDisplaySerializer(
+        many=True,
+        help_text="服务类目代码和中文名称",
+    )
+    tags = ProviderTagDisplaySerializer(
+        many=True,
+        help_text="服务者标签代码、名称和分类",
+    )
     photo_media = MediaAssetSummarySerializer(many=True, help_text="服务者照片墙")
     services = ServiceResponseSerializer(many=True, help_text="已上架服务")
     moments = MomentResponseSerializer(many=True, help_text="最近已发布动态")

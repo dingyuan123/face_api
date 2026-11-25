@@ -163,6 +163,41 @@ def _tag_codes(profile: ProviderProfile) -> list[str]:
     return [link.tag_code for link in profile.tag_links.all().order_by("sort_order", "id")]
 
 
+def provider_category_payloads(profile: ProviderProfile | None) -> list[dict[str, Any]]:
+    """返回服务者资料类目代码和中文展示信息。"""
+    if profile is None:
+        return []
+    codes = _category_codes(profile)
+    categories = ServiceCategory.objects.in_bulk(codes, field_name="code")
+    return [
+        {
+            "code": code,
+            "name": categories[code].name if code in categories else None,
+            "sort_order": categories[code].sort_order if code in categories else 0,
+            "is_missing": code not in categories,
+        }
+        for code in codes
+    ]
+
+
+def provider_tag_payloads(profile: ProviderProfile | None) -> list[dict[str, Any]]:
+    """返回服务者资料标签代码和中文展示信息。"""
+    if profile is None:
+        return []
+    codes = _tag_codes(profile)
+    tags = ProviderTag.objects.in_bulk(codes, field_name="code")
+    return [
+        {
+            "code": code,
+            "name": tags[code].name if code in tags else None,
+            "category": tags[code].category if code in tags else "",
+            "sort_order": tags[code].sort_order if code in tags else 0,
+            "is_missing": code not in tags,
+        }
+        for code in codes
+    ]
+
+
 def provider_profile_payload(
     user: User,
     request: HttpRequest | None = None,
@@ -194,6 +229,8 @@ def provider_profile_payload(
             "photo_media": [],
             "category_codes": [],
             "tag_codes": [],
+            "categories": [],
+            "tags": [],
             "updated_at": None,
         }
     avatar_media_id = profile.avatar_media_id
@@ -215,6 +252,8 @@ def provider_profile_payload(
         "photo_media": get_media_payloads(photo_ids, request),
         "category_codes": _category_codes(profile),
         "tag_codes": _tag_codes(profile),
+        "categories": provider_category_payloads(profile),
+        "tags": provider_tag_payloads(profile),
         "updated_at": profile.updated_at,
     }
 

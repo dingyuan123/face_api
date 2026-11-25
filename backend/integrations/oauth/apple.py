@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import time
 
 import jwt
@@ -15,12 +16,14 @@ from backend.integrations.oauth.contracts import (
     OAuthProviderUnavailable,
 )
 
+logger = logging.getLogger("jianmianliao.oauth.apple")
+
 
 class AppleLoginProvider:
     """验证 Apple 签发的 identity_token，只接受当前 iOS App 的有效用户。"""
 
     def verify(self, *, identity_token: str, nonce: str) -> OAuthIdentity:
-        """验证签名、签发方、受众、时效和一次性 nonce 后返回 Apple sub。"""
+        """验证签名、签发方、受众、时效及存在时的 nonce 后返回 Apple sub。"""
         token = identity_token.strip()
         expected_nonce = nonce.strip()
         if not token or not expected_nonce or not settings.APPLE_CLIENT_ID:
@@ -38,22 +41,34 @@ class AppleLoginProvider:
                 algorithms=["RS256"],
                 audience=settings.APPLE_CLIENT_ID,
                 issuer="https://appleid.apple.com",
-                options={"require": ["exp", "iat", "iss", "aud", "sub", "nonce"]},
+                options={"require": ["exp", "iat", "iss", "aud", "sub"]},
                 leeway=30,
             )
-        except jwt.InvalidNonceError as exc:
-            raise OAuthProviderError("Apple nonce 校验失败") from exc
         except jwt.PyJWKClientError as exc:
             raise OAuthProviderUnavailable("Apple 登录验证暂不可用") from exc
-        except (jwt.PyJWTError, ValueError) as exc:
+        except (jwt.InvalidTokenError, ValueError) as exc:
             raise OAuthProviderError("Apple 登录凭据无效") from exc
         token_nonce = str(claims.get("nonce", ""))
         expected_nonce_hash = hashlib.sha256(expected_nonce.encode("utf-8")).hexdigest()
-        if token_nonce not in {expected_nonce, expected_nonce_hash}:
+        nonce_verified = bool(token_nonce)
+        if token_nonce and token_nonce not in {expected_nonce, expected_nonce_hash}:
             raise OAuthProviderError("Apple nonce 校验失败")
+        if not token_nonce:
+            logger.warning(
+                "Apple identity_token 未包含 nonce，按客户端兼容模式继续验证标准声明",
+                extra={
+                    "oauth_provider": "APPLE",
+                    "subject_present": bool(claims.get("sub")),
+                    "nonce_verified": False,
+                },
+            )
         if int(claims.get("exp", 0)) <= int(time.time()) - 30:
             raise OAuthProviderError("Apple 登录凭据已过期")
         subject = str(claims.get("sub", "")).strip()
         if not subject:
             raise OAuthProviderError("Apple 登录凭据缺少用户标识")
-        return OAuthIdentity(provider="APPLE", subject=subject)
+        return OAuthIdentity(
+            provider="APPLE",
+            subject=subject,
+            nonce_verified=nonce_verified,
+        )

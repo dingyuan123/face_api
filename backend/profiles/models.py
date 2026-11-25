@@ -37,6 +37,8 @@ class ProfileCityOption(models.Model):
     name = models.CharField(max_length=50, db_comment="城市中文展示名称")
     sort_order = models.PositiveIntegerField(default=0, db_comment="城市展示排序值")
     is_active = models.BooleanField(default=True, db_comment="城市是否允许选择")
+    version = models.PositiveIntegerField(default=1, db_comment="城市配置乐观锁版本号")
+    version = models.PositiveIntegerField(default=1, db_comment="城市配置乐观锁版本号")
     created_at = models.DateTimeField(auto_now_add=True, db_comment="城市选项创建时间")
     updated_at = models.DateTimeField(auto_now=True, db_comment="城市选项最近更新时间")
 

@@ -3,6 +3,25 @@
 ## 1. 版本和入口
 
 - `[DESIGN]` 客户端业务接口统一 `/api/v1`，管理接口统一 `/admin/v1`。
+- `[DESIGN]` Vue 管理后台使用独立 `AdminBearerTokenAuth`：`POST /admin/v1/auth/login/` 登录，`GET /admin/v1/auth/me/` 获取权限，`POST /admin/v1/auth/refresh/` 轮换令牌，`POST /admin/v1/auth/logout/` 撤销会话。
+- `[DESIGN]` 管理员登录启用验证码时先调用 `POST /admin/v1/auth/captcha/`，登录提交 `captcha_token/captcha_answer`；密码找回使用 `POST /admin/v1/auth/password/forgot/` 和 `POST /admin/v1/auth/password/reset/`，验证码按 `PASSWORD_RESET` 用途消费。
+- `[DESIGN]` 既有 `/api/v1/admin/*` 接口兼容 `AdminBearerTokenAuth` 和平台用户 Bearer Token；迁移期间 Vue 管理后台可以统一使用 `/admin/v1/auth/login/` 获取的 Token 调用两套管理接口。
+- `[DESIGN]` 管理后台权限点必须在服务端逐接口校验，当前首批包括 `admin.dashboard.read/admin.user.read/admin.user.ban/admin.provider.read/admin.provider.status/admin.audit.read/admin.rbac.*`。
+- `[DESIGN]` 管理员写操作统一记录 `AdminOperationLog`，用户封禁/解封和服务者停用/恢复要求 `expected_version`、原因并可使用 `Idempotency-Key`。
+- `[DESIGN]` 管理列表统一返回 `items,total,page,page_size`；详情返回单对象；所有新接口必须维护 OpenAPI 分页对象，不再把分页响应声明成数组。
+- `[DESIGN]` 管理后台首页支持 `GET /admin/v1/dashboard/overview/`、`GET /admin/v1/dashboard/trends/?range=7d|30d` 和 `GET /admin/v1/dashboard/todos/`。
+- `[DESIGN]` 角色管理支持创建、查看、修改、删除和整体替换权限点；删除仅允许无成员且非 `SUPER_ADMIN` 的角色，所有写操作记录统一审计。
+- `[DESIGN]` 管理员订单列表和详情支持 `GET /admin/v1/orders/`、`GET /admin/v1/orders/{order_no}/`，统一使用 `admin.order.read` 权限点。
+- `[DESIGN]` 管理员财务接口支持 `GET /admin/v1/finance/overview/`、`GET /admin/v1/finance/transactions/`、`GET /admin/v1/finance/transactions/export/`，流水合并钱包和收益账本且不导出收款账户。
+- `[DESIGN]` 管理员佣金接口支持 `GET /admin/v1/commission/overview/`、`GET /admin/v1/commission/trends/`、`GET /admin/v1/commission/details/`；当前佣金类型为 `PROVIDER_COMMISSION`。
+- `[DESIGN]` 退款审核支持管理员指定 `refund_amount_minor` 进行部分退款，申请金额与实际同意金额分别返回 `refund_amount_minor/approved_refund_amount_minor`。
+- `[DESIGN]` 财务对账支持 `GET /admin/v1/finance/reconciliation/`；提现管理支持 `GET /admin/v1/withdrawals/` 和 `POST /admin/v1/withdrawals/{request_no}/actions/{action}/`，动作支持 `approve/reject/retry`。
+- `[DESIGN]` 用户举报接口为 `POST /api/v1/reports/`；管理员举报接口为 `GET /admin/v1/reports/` 和 `POST /admin/v1/reports/{report_no}/actions/{action}/`，动作支持 `resolve/reject`。
+- `[DESIGN]` 敏感词管理接口为 `GET/POST /admin/v1/sensitive-words/`、`PATCH/DELETE /admin/v1/sensitive-words/{word_id}/`；删除采用停用状态并保留审计。
+- `[DESIGN]` 平台数据看板支持 `GET /admin/v1/analytics/overview/`、`/analytics/trends/`、`/analytics/breakdown/`，维度支持 `city/category/service_category/provider/channel`；`category` 与 `service_category` 为兼容别名。
+- `[DESIGN]` 系统设置支持 `GET/PATCH /admin/v1/settings/basic/` 和公告 `GET/POST /admin/v1/settings/announcements/`、`PATCH/DELETE /admin/v1/settings/announcements/{announcement_no}/`；基础配置修改需要版本号并记录审计。
+- `[DESIGN]` 系统设置支持城市、服务类目和佣金规则：`GET/POST /admin/v1/settings/cities/`、`PATCH/DELETE /admin/v1/settings/cities/{code}/`、`GET/POST /admin/v1/settings/service-categories/`、`PATCH/DELETE /admin/v1/settings/service-categories/{code}/`、`GET/PATCH /admin/v1/settings/commission-rules/`。
+- `[DESIGN]` 客服模块使用独立工单，不复用订单 IM 权限：用户接口位于 `/api/v1/support/`，客服工作台位于 `/admin/v1/support/`。工单支持分类、优先级、订单关联、消息、分配、解决和关闭。
 - `[DESIGN]` 同一版本内只做向后兼容新增；删除/改语义/改类型必须新建版本或经过迁移窗口。
 - `[DESIGN]` 每个接口由 `drf-spectacular` 生成 OpenAPI；发布前校验 schema、示例、错误码和幂等说明。
 - `[DESIGN]` 请求和响应使用 UTF-8 JSON；文件、音视频使用对象存储短期签名地址，不直接回传大文件。
@@ -59,6 +78,14 @@
 | `SYSTEM_*` | 500/503 | 依赖不可用、内部失败 |
 
 `[DESIGN]` 错误码命名、文案和 OpenAPI 维护在代码常量/枚举，禁止散落在视图字符串中。
+
+### 3.1 枚举和配置标签展示
+
+- `[DESIGN]` 请求继续提交稳定代码；响应保留原代码字段，不使用中文文本作为写入值。
+- `[DESIGN]` 固定状态响应使用 `code + code_text` 并列结构，例如 `status/status_text`，中文由服务端统一映射。
+- `[DESIGN]` 兴趣标签、服务类目、服务标签和资料标签返回 `code/name/category/sort_order` 对象；同时保留 `*_codes` 便于旧客户端兼容。
+- `[DESIGN]` 管理审计返回 `action/action_text/target_type/target_type_text`，未知动作只回退为“未知操作”，原始代码仍保留用于排查。
+- `[DESIGN]` 历史订单服务标签可回退当前配置名称；后续如需完全历史一致，应增加下单时名称快照。
 
 ## 4. 分页、排序和查询
 
@@ -323,6 +350,58 @@
 - `[DESIGN]` 错误约定：账号或密码错误为 401 `AUTH_INVALID_CREDENTIALS`，账号状态异常为 403 `AUTH_ACCOUNT_NOT_ALLOWED`，开发开关关闭或生产环境为 404 `SYSTEM_NOT_FOUND`。
 - `[DESIGN]` 创建独立会话并支持 `Idempotency-Key`；重复同键同请求复用令牌，不同请求返回 409 `AUTH_IDEMPOTENCY_CONFLICT`。
 - `[CONFIRM]` 正式密码登录 API 不在当前版本承诺范围内，不能被 App 或生产客户端依赖。
+
+## 17. 管理后台公司资料接口
+
+- `[DESIGN]` `GET/PATCH /admin/v1/settings/company-profile/` 返回和维护公司全称、公司简介、营业执照媒体摘要及 `version`。
+- `[DESIGN]` 首次创建提交 `expected_version=0`，更新提交查询响应返回的版本；版本冲突返回 409 `ADMIN_VERSION_CONFLICT`。
+- `[DESIGN]` `POST /admin/v1/settings/company-profile/license/` 使用 multipart 上传营业执照并返回 `media_id` 和短期 `display_url`；重复上传使用 `Idempotency-Key` 去重。
+- `[DESIGN]` 公司资料写接口可选 `Idempotency-Key`；同键同请求复用结果，同键不同请求返回 409 `ADMIN_IDEMPOTENCY_CONFLICT`。
+
+## 18. 账号注销接口
+
+- `[DESIGN]` `GET /api/v1/account/deletion/check/` 固定返回 `orders/wallet/services/security` 四项条件和 `can_delete`，未通过项返回操作文案与前端路由。
+- `[DESIGN]` `POST /api/v1/account/deletion/sms-code/` 只向绑定手机号发送注销验证码；沿用 60 秒频率限制、5 分钟有效和验证码尝试次数限制。
+- `[DESIGN]` `POST /api/v1/account/deletion/` 校验 `code/confirm` 与注销条件后执行清理；成功后撤销全部用户令牌并立即拒绝后续请求。
+- `[DESIGN]` 清理个人资料、动态、评论、点赞、收藏、关注和登录绑定；交易、支付、退款、提现、聊天、客服、评价和安全审计按隐私要求保留或匿名化。
+- `[DESIGN]` 注销审计保留条件快照、清理数量、验证码请求标识和完成时间；服务层重复调用不会重复执行清理。
+- `[CONFIRM]` 生产短信服务商、会员/优惠券权益清理和更长期的合规留存周期仍需接入对应模块后确认。
+
+### 18.1 管理员强制注销和资金清空
+
+- `[DESIGN]` `POST /admin/v1/users/{user_public_id}/balances/clear/` 仅允许 `admin.finance.adjust` 权限，清空钱包和收益余额并写入不可变调整流水。
+- `[DESIGN]` `POST /admin/v1/users/{user_public_id}/force-delete/` 仅允许 `admin.user.force_delete` 权限，跳过用户注销资金门槛但强制清空余额后执行个人资料和内容清理。
+- `[DESIGN]` 两个接口必须填写管理员原因，支持 `Idempotency-Key`，返回清空/取消的资金明细和审计结果。
+- `[DESIGN]` 强制注销仍保留交易、支付、退款、提现、聊天、客服、评价和安全审计，不允许删除用户主键和资金流水。
+
+## 19. 账号密码、忘记密码和手机号更换
+
+- `[DESIGN]` `GET /api/v1/users/me/security/` 返回手机号脱敏值、是否设置密码、登录方式、换绑/找回能力和有效设备会话数。
+- `[DESIGN]` 首次设置密码和修改密码使用 `POST /api/v1/users/me/password/`；首次设置需要绑定手机号验证码，修改已有密码还需当前密码。
+- `[DESIGN]` 忘记密码使用 `POST /api/v1/auth/password/forgot/sms-code/` 和 `POST /api/v1/auth/password/reset/`，成功后撤销全部设备令牌。
+- `[DESIGN]` 换绑手机号使用 `POST /api/v1/users/me/phone-change/` 和 `POST /api/v1/users/me/phone-change/confirm/`；已有手机号需要新旧手机号双验证码，无手机号账号使用当前密码和新手机号验证码。
+- `[DESIGN]` 新手机号已经绑定其他账号时返回 `AUTH_PHONE_ALREADY_BOUND`，不在换绑流程中隐式合并账号。
+- `[DESIGN]` 密码和手机号安全事件写入不可变审计，不记录明文密码、手机号、验证码或令牌；密码/换绑成功后保留当前设备并撤销其他设备令牌。
+
+## 20. Apple 登录 nonce 兼容
+
+- `[DESIGN]` Apple 登录继续强制校验 `identity_token` 的签名、`iss=https://appleid.apple.com`、`aud=APPLE_CLIENT_ID`、`exp`、`iat` 和 `sub`。
+- `[DESIGN]` 当前 UniApp X 内置 Apple 登录 SDK 不支持向 Apple 传入自定义 nonce，因此 token 缺少 `nonce` claim 时进入兼容模式；请求体仍接收 `nonce` 用于审计。
+- `[DESIGN]` 如果 Apple token 包含 `nonce`，后端必须验证其等于请求 nonce 原文或 SHA-256 值。
+- `[CONFIRM]` 后续接入支持 nonce 的原生 Apple 登录模块后，应恢复严格 nonce 防重放校验。
+
+## 21. 正式账号密码登录
+
+- `[DESIGN]` `POST /api/v1/auth/password/login/` 请求 `phone/password/referral_context`，响应复用 `TokenPairResponseSerializer`，包含 `requires_phone_binding` 和 `requires_identity_selection`。
+- `[DESIGN]` 账号不存在、未设置密码或密码错误统一返回 401 `AUTH_INVALID_CREDENTIALS`，提示“手机号或密码错误”，不泄露账号是否存在。
+- `[DESIGN]` 连续 5 次密码错误临时锁定 15 分钟；锁定期间返回 423 `AUTH_LOGIN_LOCKED`，成功登录后清零失败次数。
+- `[DESIGN]` `Idempotency-Key` 与验证码登录一致；同键同请求复用令牌，同键不同请求返回 409 `AUTH_IDEMPOTENCY_CONFLICT`。
+
+## 18. 普通用户公司资料接口
+
+- `[DESIGN]` `GET /api/v1/company-profile/` 无需登录，返回公司全称、公司简介和营业执照展示信息。
+- `[DESIGN]` 营业执照仅返回 `media_id/content_type/width/height/display_url/display_url_expires_at`，不返回 `content_url`、存储路径、管理员信息或版本号。
+- `[DESIGN]` 公司资料未初始化时返回空资料和 `business_license_media=null`，接口保持 200。
 
 ## 16. 订单实时聊天接口与 WebSocket
 

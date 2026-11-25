@@ -94,6 +94,7 @@ python manage.py spectacular --file openapi.yaml
 
 - 访问地址：`/admin/`。
 - 测试管理后台地址：`/management/`，首期包含总览、实名认证人工审核和服务者入驻人工审核；使用 `is_staff` 管理员账号登录。
+- Vue 管理后台 API 地址：`/admin/v1/`；管理员使用手机号和密码调用 `POST /admin/v1/auth/login/` 获取独立 Bearer Token，之后携带 `Authorization: Bearer <access_token>`。
 - 登录用户名使用完整手机号，不是 `phone_hash`。
 - 创建或提升管理员账号：
   ```powershell

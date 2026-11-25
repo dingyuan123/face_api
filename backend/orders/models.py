@@ -277,6 +277,11 @@ class OrderRefundRequest(models.Model):
     refund_amount_minor = models.PositiveBigIntegerField(
         db_comment="申请退款金额，单位为币种最小单位，CNY 为分"
     )
+    approved_refund_amount_minor = models.PositiveBigIntegerField(
+        null=True,
+        blank=True,
+        db_comment="管理员同意的实际退款金额，单位为分；为空表示尚未审核",
+    )
     reviewed_by_user_id = models.BigIntegerField(
         null=True,
         blank=True,

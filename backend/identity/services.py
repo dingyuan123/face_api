@@ -12,6 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from backend.common.crypto import encrypt_text, hash_sensitive_text, sensitive_fingerprint
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.identity.models import IdentityVerification
@@ -335,7 +336,9 @@ def identity_verification_payload(
         return {
             "verification_no": None,
             "status": "NOT_SUBMITTED",
+            "status_text": "未提交",
             "real_name_status": "NOT_SUBMITTED",
+            "real_name_status_text": "未提交",
             "id_card_front_media_id": None,
             "id_card_back_media_id": None,
             "id_card_front_media": None,
@@ -359,7 +362,12 @@ def identity_verification_payload(
         if verification.verification_no
         else None,
         "status": verification.status,
+        "status_text": enum_label(IdentityVerification.Status, verification.status),
         "real_name_status": verification.status,
+        "real_name_status_text": enum_label(
+            IdentityVerification.Status,
+            verification.status,
+        ),
         "id_card_front_media_id": verification.id_card_front_media_id or None,
         "id_card_back_media_id": verification.id_card_back_media_id or None,
         "id_card_front_media": front_media[0] if front_media else None,

@@ -20,6 +20,7 @@ from backend.referrals.models import (
     ReferralShareLink,
     ReferralVisit,
 )
+from backend.referrals.queries import referral_overview
 from backend.referrals.reward_services import (
     active_referral_policy_at,
     apply_refund_to_referral_reward,
@@ -225,17 +226,18 @@ def test_order_reward_snapshots_settles_and_refund_recovers() -> None:
     reward = ReferralReward.objects.get(order_no=str(created.order.order_no))
     assert reward.amount_minor == 680
     assert reward.reward_base_minor == 6800
-    result = settle_due_referral_rewards()
+    overview = referral_overview(user=inviter)
 
     reward.refresh_from_db()
     account = EarningAccount.objects.get(
         user=inviter,
         account_type=EarningAccount.AccountType.REFERRAL_REWARD,
     )
-    assert result["settled"] == 1
+    assert overview["reward_summary"]["SETTLED"]["amount_minor"] == 680
     assert reward.status == ReferralReward.Status.SETTLED
     assert account.available_amount_minor == 680
     assert EarningEntry.objects.filter(business_type="REFERRAL_REWARD").count() == 1
+    assert settle_due_referral_rewards()["settled"] == 0
 
     created.order.refunded_amount_minor = created.order.paid_amount_minor
     created.order.save(update_fields=["refunded_amount_minor", "updated_at"])

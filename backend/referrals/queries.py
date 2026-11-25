@@ -7,12 +7,14 @@ from typing import Any
 from django.db.models import Count, Sum
 
 from backend.accounts.models import User
+from backend.common.display import enum_label
 from backend.referrals.models import (
     OrderReferralSnapshot,
     ReferralAttribution,
     ReferralPolicy,
     ReferralReward,
 )
+from backend.referrals.reward_services import settle_due_referral_rewards
 from backend.referrals.services import (
     build_share_url,
     get_or_create_invite_code,
@@ -32,6 +34,7 @@ def _reward_payload(reward: ReferralReward) -> dict[str, Any]:
         "reward_rate_bps": reward.reward_rate_bps,
         "amount_minor": reward.amount_minor,
         "status": reward.status,
+        "status_text": enum_label(ReferralReward.Status, reward.status),
         "settle_after": reward.settle_after,
         "settled_at": reward.settled_at,
         "cancel_reason": reward.cancel_reason,
@@ -44,6 +47,7 @@ def _reward_payload(reward: ReferralReward) -> dict[str, Any]:
 
 def referral_overview(*, user: User) -> dict[str, Any]:
     """返回分享赚钱页的邀请码、链接、转化和奖励汇总。"""
+    settle_due_referral_rewards(limit=200)
     invite_code = get_or_create_invite_code(user=user)
     share_link = get_or_create_profile_share_link(user=user)
     attributed = ReferralAttribution.objects.filter(inviter_user=user)
@@ -67,19 +71,34 @@ def referral_overview(*, user: User) -> dict[str, Any]:
         "ordered_user_count": snapshots.values("invitee_user").distinct().count(),
         "valid_order_amount_minor": snapshots.aggregate(total=Sum("reward_base_minor"))["total"]
         or 0,
-        "reward_summary": {row["status"]: row for row in reward_rows},
+        "reward_summary": {
+            row["status"]: {
+                **row,
+                "status_text": enum_label(ReferralReward.Status, row["status"]),
+            }
+            for row in reward_rows
+        },
     }
 
 
 def referral_reward_summary(*, user: User) -> dict[str, Any]:
     """返回当前邀请人奖励状态汇总。"""
+    settle_due_referral_rewards(limit=200)
     rows = (
         ReferralReward.objects.filter(inviter_user=user)
         .values("status")
         .annotate(count=Count("id"), amount_minor=Sum("amount_minor"))
         .order_by("status")
     )
-    return {"items": list(rows)}
+    return {
+        "items": [
+            {
+                **row,
+                "status_text": enum_label(ReferralReward.Status, row["status"]),
+            }
+            for row in rows
+        ]
+    }
 
 
 def list_referral_rewards(
@@ -90,6 +109,7 @@ def list_referral_rewards(
     page_size: int = 20,
 ) -> dict[str, Any]:
     """分页返回当前邀请人的推广奖励明细。"""
+    settle_due_referral_rewards(limit=200)
     from backend.referrals.services import _invalid
 
     queryset = ReferralReward.objects.select_related(
@@ -195,6 +215,7 @@ def list_referral_policies() -> list[dict[str, Any]]:
             "version": item.version,
             "name": item.name,
             "status": item.status,
+            "status_text": enum_label(ReferralPolicy.Status, item.status),
             "reward_rate_bps": item.reward_rate_bps,
             "max_reward_amount_minor": item.max_reward_amount_minor,
             "min_order_amount_minor": item.min_order_amount_minor,

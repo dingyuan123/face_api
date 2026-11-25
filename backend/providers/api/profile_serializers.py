@@ -5,6 +5,25 @@ from rest_framework import serializers
 from backend.media.api.serializers import MediaAssetSummarySerializer
 
 
+class ProviderCategoryDisplaySerializer(serializers.Serializer):
+    """服务者资料类目代码和中文展示信息。"""
+
+    code = serializers.CharField(help_text="服务类目稳定代码")
+    name = serializers.CharField(allow_null=True, help_text="服务类目中文名称")
+    sort_order = serializers.IntegerField(help_text="类目展示排序值")
+    is_missing = serializers.BooleanField(help_text="当前配置中是否不存在该类目")
+
+
+class ProviderTagDisplaySerializer(serializers.Serializer):
+    """服务者资料标签代码和中文展示信息。"""
+
+    code = serializers.CharField(help_text="服务者标签稳定代码")
+    name = serializers.CharField(allow_null=True, help_text="服务者标签中文名称")
+    category = serializers.CharField(help_text="服务者标签分类")
+    sort_order = serializers.IntegerField(help_text="标签展示排序值")
+    is_missing = serializers.BooleanField(help_text="当前配置中是否不存在该标签")
+
+
 class ProviderProfileInputSerializer(serializers.Serializer):
     """服务者资料修改请求。"""
 
@@ -69,6 +88,14 @@ class ProviderProfileResponseSerializer(serializers.Serializer):
     tag_codes = serializers.ListField(
         child=serializers.CharField(),
         help_text="服务者资料标签代码",
+    )
+    categories = ProviderCategoryDisplaySerializer(
+        many=True,
+        help_text="服务者资料类目代码和中文名称",
+    )
+    tags = ProviderTagDisplaySerializer(
+        many=True,
+        help_text="服务者资料标签代码、名称和分类",
     )
     updated_at = serializers.DateTimeField(allow_null=True, help_text="资料最近更新时间")
 

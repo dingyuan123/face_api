@@ -6,6 +6,7 @@ import hashlib
 import hmac
 import json
 import re
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import timedelta
@@ -20,15 +21,21 @@ from django.utils import timezone
 from backend.accounts.models import (
     AuthToken,
     LoginRequest,
+    PasswordLoginAttempt,
     User,
     UserAuth,
     VerificationCode,
     VerificationSendGuard,
 )
 from backend.common.crypto import encrypt_text
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.integrations.oauth.contracts import OAuthIdentity
+from backend.integrations.sms.contracts import (
+    SmsProviderError,
+    SmsProviderUnavailable,
+)
 from backend.referrals.services import bind_new_user_referral
 
 PHONE_PATTERN = re.compile(r"^1[3-9]\d{9}$")
@@ -125,6 +132,57 @@ def _password_request_proof(password: str) -> str:
     return hmac.new(key, password.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+class _PasswordLoginInvalid(Exception):
+    """密码登录凭据错误的内部事务控制信号。"""
+
+
+class _PasswordLoginFailureGuard:
+    """事务回滚后独立记录密码失败次数和锁定状态。"""
+
+    def __init__(self, phone_hash: str) -> None:
+        self.phone_hash = phone_hash
+
+    def __enter__(self) -> _PasswordLoginFailureGuard:
+        return self
+
+    def __exit__(self, exc_type, exc, traceback) -> bool:
+        if exc_type is not _PasswordLoginInvalid:
+            return False
+        if _record_password_login_failure(self.phone_hash):
+            raise ApiError(
+                ErrorCode.AUTH_LOGIN_LOCKED,
+                ERROR_MESSAGES[ErrorCode.AUTH_LOGIN_LOCKED],
+                status_code=423,
+            ) from exc
+        raise ApiError(
+            ErrorCode.AUTH_INVALID_CREDENTIALS,
+            "手机号或密码错误",
+            status_code=401,
+        ) from exc
+
+
+def _record_password_login_failure(phone_hash: str) -> bool:
+    """在独立事务中记录密码错误，并返回是否刚刚触发锁定。"""
+    with transaction.atomic():
+        attempt = PasswordLoginAttempt.objects.select_for_update().get_or_create(
+            phone_hash=phone_hash
+        )[0]
+        now = timezone.now()
+        attempt.failed_count += 1
+        attempt.last_failed_at = now
+        if attempt.failed_count >= settings.PASSWORD_LOGIN_MAX_FAILURES:
+            attempt.locked_until = now + timedelta(seconds=settings.PASSWORD_LOGIN_LOCK_SECONDS)
+        attempt.save(
+            update_fields=[
+                "failed_count",
+                "last_failed_at",
+                "locked_until",
+                "updated_at",
+            ]
+        )
+        return bool(attempt.locked_until)
+
+
 def _validate_idempotency_key(value: str | None) -> str | None:
     if value is None:
         return None
@@ -138,14 +196,32 @@ def _validate_idempotency_key(value: str | None) -> str | None:
     return key
 
 
-def send_sms_code(*, phone_value: str, idempotency_key: str | None = None) -> SmsCodeResult:
-    """发送登录验证码，并通过幂等键和频率锁处理重复请求。"""
+def send_sms_code(
+    *,
+    phone_value: str,
+    idempotency_key: str | None = None,
+    purpose: str = VerificationCode.Purpose.LOGIN,
+) -> SmsCodeResult:
+    """发送登录或密码重置验证码，并通过幂等键和频率锁处理重复请求。"""
     phone = normalize_phone(phone_value)
     key = _validate_idempotency_key(idempotency_key)
     phone_hash = hash_phone(phone)
-    fingerprint = _fingerprint({"phone": phone_hash, "purpose": VerificationCode.Purpose.LOGIN})
+    if purpose not in VerificationCode.Purpose.values:
+        raise ApiError(
+            ErrorCode.AUTH_CODE_INVALID,
+            "验证码用途不存在",
+            status_code=400,
+        )
+    fingerprint = _fingerprint({"phone": phone_hash, "purpose": purpose})
 
-    if not settings.SMS_MOCK_ENABLED:
+    sms_provider = "MOCK" if settings.SMS_MOCK_ENABLED else settings.SMS_PROVIDER
+    if sms_provider not in {"MOCK", "ALIYUN"}:
+        raise ApiError(
+            ErrorCode.AUTH_SMS_UNAVAILABLE,
+            ERROR_MESSAGES[ErrorCode.AUTH_SMS_UNAVAILABLE],
+            status_code=503,
+        )
+    if sms_provider == "MOCK" and not settings.SMS_MOCK_ENABLED:
         raise ApiError(
             ErrorCode.AUTH_SMS_UNAVAILABLE,
             ERROR_MESSAGES[ErrorCode.AUTH_SMS_UNAVAILABLE],
@@ -178,11 +254,13 @@ def send_sms_code(*, phone_value: str, idempotency_key: str | None = None) -> Sm
 
         request_id = uuid.uuid4()
         debug_code = _debug_code(request_id)
+        code_text = debug_code if sms_provider == "MOCK" else f"{secrets.randbelow(1_000_000):06d}"
         code = VerificationCode.objects.create(
             request_id=request_id,
             phone_hash=phone_hash,
             phone_masked=mask_phone(phone),
-            code_hash=make_password(debug_code),
+            code_hash=make_password(code_text),
+            purpose=purpose,
             expires_at=now + timedelta(seconds=settings.SMS_CODE_TTL_SECONDS),
             max_attempts=settings.SMS_CODE_MAX_ATTEMPTS,
             idempotency_key=key,
@@ -190,6 +268,32 @@ def send_sms_code(*, phone_value: str, idempotency_key: str | None = None) -> Sm
         )
         guard.next_allowed_at = now + timedelta(seconds=settings.SMS_CODE_RESEND_SECONDS)
         guard.save(update_fields=["next_allowed_at", "updated_at"])
+        if sms_provider == "ALIYUN":
+            from backend.integrations.sms.aliyun import AliyunSmsGateway
+
+            try:
+                AliyunSmsGateway().send_sms(phone=phone, code=code_text)
+            except SmsProviderError as exc:
+                raise ApiError(
+                    ErrorCode.AUTH_SMS_UNAVAILABLE,
+                    ERROR_MESSAGES[ErrorCode.AUTH_SMS_UNAVAILABLE],
+                    status_code=503,
+                    details={
+                        "sms_provider": "ALIYUN",
+                        "provider_code": exc.provider_code,
+                    },
+                ) from exc
+            except SmsProviderUnavailable as exc:
+                raise ApiError(
+                    ErrorCode.AUTH_SMS_UNAVAILABLE,
+                    ERROR_MESSAGES[ErrorCode.AUTH_SMS_UNAVAILABLE],
+                    status_code=503,
+                    details={
+                        "sms_provider": "ALIYUN",
+                        "provider_status": exc.provider_status,
+                        "missing_config": exc.missing_config,
+                    },
+                ) from exc
         return _sms_result(code, reused=False)
 
 
@@ -363,9 +467,11 @@ def login_with_password(
     phone_value: str,
     password_value: str,
     idempotency_key: str | None = None,
+    referral_context: dict[str, Any] | None = None,
+    dev_only: bool = True,
 ) -> LoginResult:
-    """开发环境使用已有账号密码签发标准令牌；生产环境强制禁用。"""
-    if not settings.DEV_PASSWORD_LOGIN_ENABLED:
+    """使用手机号和密码签发标准令牌；开发入口可单独禁用。"""
+    if dev_only and not settings.DEV_PASSWORD_LOGIN_ENABLED:
         raise ApiError(
             ErrorCode.NOT_FOUND,
             ERROR_MESSAGES[ErrorCode.NOT_FOUND],
@@ -381,10 +487,11 @@ def login_with_password(
         {
             "phone": phone_hash,
             "password_proof": _password_request_proof(password),
-            "purpose": "DEV_PASSWORD_LOGIN",
+            "purpose": "DEV_PASSWORD_LOGIN" if dev_only else "PASSWORD_LOGIN",
+            "referral_context": referral_context or {},
         }
     )
-    with transaction.atomic():
+    with _PasswordLoginFailureGuard(phone_hash), transaction.atomic():
         login_request = (
             LoginRequest.objects.select_for_update(of=("self",))
             .select_related("user")
@@ -406,19 +513,38 @@ def login_with_password(
                 )
             return _login_result_from_request(login_request)
 
-        user = User.objects.filter(phone_hash=phone_hash).first()
-        if user is None or not user.has_usable_password() or not user.check_password(password):
+        attempt, _ = PasswordLoginAttempt.objects.select_for_update().get_or_create(
+            phone_hash=phone_hash
+        )
+        now = timezone.now()
+        if attempt.locked_until and attempt.locked_until > now:
             raise ApiError(
-                ErrorCode.AUTH_INVALID_CREDENTIALS,
-                ERROR_MESSAGES[ErrorCode.AUTH_INVALID_CREDENTIALS],
-                status_code=401,
+                ErrorCode.AUTH_LOGIN_LOCKED,
+                ERROR_MESSAGES[ErrorCode.AUTH_LOGIN_LOCKED],
+                status_code=423,
             )
+        if attempt.locked_until and attempt.locked_until <= now:
+            attempt.failed_count = 0
+            attempt.locked_until = None
+            attempt.save(update_fields=["failed_count", "locked_until", "updated_at"])
+
+        user = User.objects.filter(phone_hash=phone_hash).first()
+        if (
+            user is None
+            or not bool(user.password)
+            or not user.has_usable_password()
+            or not user.check_password(password)
+        ):
+            raise _PasswordLoginInvalid
         if user.status != User.Status.ACTIVE:
             raise ApiError(
                 ErrorCode.AUTH_ACCOUNT_NOT_ALLOWED,
                 "账号状态不允许登录",
                 status_code=403,
             )
+        attempt.failed_count = 0
+        attempt.locked_until = None
+        attempt.save(update_fields=["failed_count", "locked_until", "updated_at"])
 
         if login_request is None:
             login_request = LoginRequest.objects.create(
@@ -931,14 +1057,28 @@ def session_payload(user: User) -> dict[str, Any]:
         "user_public_id": str(user.public_id),
         "phone_masked": user.phone_masked,
         "status": user.status,
+        "status_text": enum_label(User.Status, user.status),
         "requires_identity_selection": not user.initial_role_selected,
         "requires_phone_binding": user.phone_hash is None,
         "auth_methods": sorted(user.auths.values_list("auth_type", flat=True).distinct()),
         "primary_role": user.primary_role,
+        "primary_role_text": enum_label(User.InitialRole, user.primary_role),
         "current_role": _current_role(user),
+        "current_role_text": enum_label(
+            User.InitialRole,
+            _current_role(user),
+        ),
         "roles": _user_roles(user),
         "default_workspace": user.default_workspace,
+        "default_workspace_text": enum_label(
+            User.Workspace,
+            user.default_workspace,
+        ),
         "provider_status": user.provider_status,
+        "provider_status_text": enum_label(
+            User.ProviderStatus,
+            user.provider_status,
+        ),
     }
 
 
@@ -992,12 +1132,25 @@ def initial_role_payload(user: User) -> dict[str, Any]:
     """返回身份选择和后续页面路由状态。"""
     return {
         "primary_role": user.primary_role,
+        "primary_role_text": enum_label(User.InitialRole, user.primary_role),
         "current_role": _current_role(user),
+        "current_role_text": enum_label(
+            User.InitialRole,
+            _current_role(user),
+        ),
         "roles": _user_roles(user),
         "default_workspace": user.default_workspace,
+        "default_workspace_text": enum_label(
+            User.Workspace,
+            user.default_workspace,
+        ),
         "next_route": user.default_workspace,
         "requires_identity_selection": not user.initial_role_selected,
         "provider_status": user.provider_status,
+        "provider_status_text": enum_label(
+            User.ProviderStatus,
+            user.provider_status,
+        ),
     }
 
 

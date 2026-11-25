@@ -16,6 +16,7 @@ from backend.catalog.models import ProviderService
 from backend.catalog.services import service_payload
 from backend.common.context import current_trace_id
 from backend.common.crypto import sensitive_fingerprint
+from backend.common.display import enum_label
 from backend.common.errors import ERROR_MESSAGES, ErrorCode
 from backend.common.exceptions import ApiError
 from backend.content.models import (
@@ -215,33 +216,54 @@ def _moment_payload(
     viewer_state: dict[str, bool] | None = None,
 ) -> dict[str, Any]:
     media_ids = [link.media_id for link in moment.media_links.all().order_by("position", "id")]
+    tag_links = list(moment.tag_links.select_related("tag").order_by("position", "id"))
     provider_profile = getattr(moment.provider_user, "provider_profile", None)
     avatar_media_id = get_provider_avatar_media_id(moment.provider_user)
     avatar_media = get_media_payloads([avatar_media_id], request) if avatar_media_id else []
     verification = {
         "real_name_status": "NOT_SUBMITTED",
+        "real_name_status_text": "未提交",
         "face_status": "NOT_SUBMITTED",
+        "face_status_text": "未提交",
     }
     for item in moment.provider_user.identity_verifications.all():
         if item.verification_type == IdentityVerification.Type.REAL_NAME:
             verification["real_name_status"] = item.status
+            verification["real_name_status_text"] = enum_label(
+                IdentityVerification.Status,
+                item.status,
+            )
         if item.verification_type == IdentityVerification.Type.FACE:
             verification["face_status"] = item.status
+            verification["face_status_text"] = enum_label(
+                IdentityVerification.Status,
+                item.status,
+            )
     attached_service = (
         service_payload(moment.attached_service, request) if moment.attached_service else None
     )
     return {
         "id": str(moment.public_id),
         "type": moment.type,
+        "type_text": enum_label(Moment.Type, moment.type),
         "category_code": moment.category.code if moment.category else None,
+        "category": {
+            "code": moment.category.code,
+            "name": moment.category.name,
+            "sort_order": moment.category.sort_order,
+        }
+        if moment.category
+        else None,
         "content": moment.content,
         "cover_media": get_media_payloads([moment.cover_media_id], request)[0]
         if moment.cover_media_id
         else None,
         "media": get_media_payloads(media_ids, request),
         "visibility": moment.visibility,
+        "visibility_text": enum_label(Moment.Visibility, moment.visibility),
         "allow_recommend": moment.allow_recommend,
         "status": moment.status,
+        "status_text": enum_label(Moment.Status, moment.status),
         "reject_reason": moment.reject_reason,
         "provider": {
             "user_public_id": str(moment.provider_user.public_id),
@@ -251,7 +273,16 @@ def _moment_payload(
         },
         "viewer_state": viewer_state if viewer_state is not None else _viewer_state(moment, viewer),
         "attached_service": attached_service,
-        "tag_codes": [link.tag.code for link in moment.tag_links.all().order_by("position", "id")],
+        "tag_codes": [link.tag.code for link in tag_links],
+        "tags": [
+            {
+                "code": link.tag.code,
+                "name": link.tag.name,
+                "category": link.tag.category,
+                "sort_order": link.tag.sort_order,
+            }
+            for link in tag_links
+        ],
         "like_count": moment.like_count,
         "comment_count": moment.comment_count,
         "share_count": moment.share_count,

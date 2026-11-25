@@ -127,18 +127,29 @@ class MomentResponseSerializer(serializers.Serializer):
 
     id = serializers.UUIDField(help_text="动态 UUID")
     type = serializers.CharField(help_text="动态类型")
+    type_text = serializers.CharField(help_text="动态类型中文含义")
     category_code = serializers.CharField(allow_null=True, help_text="动态内容类目代码")
+    category = MomentCategoryResponseSerializer(
+        allow_null=True,
+        help_text="动态类目代码和中文名称",
+    )
     content = serializers.CharField(help_text="动态文案")
     cover_media = MediaAssetSummarySerializer(allow_null=True, help_text="动态封面")
     media = MediaAssetSummarySerializer(many=True, help_text="动态媒体列表")
     visibility = serializers.CharField(help_text="动态可见范围")
+    visibility_text = serializers.CharField(help_text="动态可见范围中文含义")
     allow_recommend = serializers.BooleanField(help_text="是否允许推荐")
     status = serializers.CharField(help_text="动态状态")
+    status_text = serializers.CharField(help_text="动态状态中文含义")
     reject_reason = serializers.CharField(help_text="审核拒绝原因")
     provider = MomentProviderSerializer(help_text="动态发布者摘要")
     viewer_state = MomentViewerStateSerializer(help_text="当前访问者互动状态")
     attached_service = ServiceResponseSerializer(allow_null=True, help_text="可选挂载服务")
     tag_codes = serializers.ListField(child=serializers.CharField(), help_text="动态标签代码")
+    tags = MomentTagResponseSerializer(
+        many=True,
+        help_text="动态标签代码和中文名称",
+    )
     like_count = serializers.IntegerField(help_text="点赞数")
     comment_count = serializers.IntegerField(help_text="评论数")
     share_count = serializers.IntegerField(help_text="分享数")

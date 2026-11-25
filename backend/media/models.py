@@ -24,6 +24,7 @@ class MediaAsset(models.Model):
         MOMENT_VIDEO = "MOMENT_VIDEO", "动态视频"
         NEWS_IMAGE = "NEWS_IMAGE", "资讯图片"
         CHAT_IMAGE = "CHAT_IMAGE", "聊天图片"
+        COMPANY_BUSINESS_LICENSE = "COMPANY_BUSINESS_LICENSE", "公司营业执照"
 
     class Status(models.TextChoices):
         AVAILABLE = "AVAILABLE", "可用"

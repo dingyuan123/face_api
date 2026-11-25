@@ -17,6 +17,10 @@ from backend.content.services import moment_payload
 from backend.media.services import get_media_payloads
 from backend.providers.analytics import record_provider_event
 from backend.providers.models import ProviderProfile
+from backend.providers.profile_services import (
+    provider_category_payloads,
+    provider_tag_payloads,
+)
 from backend.reviews.models import ProviderRatingStat
 from backend.social.models import Favorite, UserFollow
 
@@ -141,6 +145,8 @@ def provider_public_payload(
         },
         "category_codes": [link.category_code for link in profile.category_links.all()],
         "tag_codes": [link.tag_code for link in profile.tag_links.all()],
+        "categories": provider_category_payloads(profile),
+        "tags": provider_tag_payloads(profile),
         "photo_media": get_media_payloads(photo_ids, request),
         "services": services,
         "moments": moments,

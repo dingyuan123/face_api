@@ -146,6 +146,10 @@ class User(AbstractBaseUser):
         blank=True,
         db_comment="Django 用户框架的最后登录时间；与业务字段 last_login_at 分离",
     )
+    version = models.PositiveIntegerField(
+        default=1,
+        db_comment="账号管理状态乐观锁版本号；管理员封禁、解封等操作递增",
+    )
 
     objects = UserManager()
 
@@ -253,6 +257,11 @@ class VerificationCode(models.Model):
 
     class Purpose(models.TextChoices):
         LOGIN = "LOGIN", "登录/注册"
+        PASSWORD_RESET = "PASSWORD_RESET", "密码重置"
+        ACCOUNT_DELETION = "ACCOUNT_DELETION", "账号注销确认"
+        PASSWORD_CHANGE = "PASSWORD_CHANGE", "设置或修改密码"
+        PHONE_CHANGE_OLD = "PHONE_CHANGE_OLD", "更换手机号验证原手机号"
+        PHONE_CHANGE_NEW = "PHONE_CHANGE_NEW", "更换手机号验证新手机号"
 
     id = models.BigAutoField(primary_key=True, db_comment="验证码记录自增主键")
     request_id = models.UUIDField(
@@ -268,7 +277,7 @@ class VerificationCode(models.Model):
         max_length=16,
         choices=Purpose.choices,
         default=Purpose.LOGIN,
-        db_comment="验证码用途，当前仅支持登录或注册",
+        db_comment="验证码用途：登录注册、密码重置或账号注销确认",
     )
     expires_at = models.DateTimeField(db_comment="验证码过期时间，UTC 时间")
     attempts = models.PositiveSmallIntegerField(default=0, db_comment="已尝试验证次数")
@@ -342,6 +351,46 @@ class LoginRequest(models.Model):
         db_table_comment = "登录请求幂等和结果记录表"
 
 
+class PasswordLoginAttempt(models.Model):
+    """账号密码登录失败次数和临时锁定状态。"""
+
+    id = models.BigAutoField(
+        primary_key=True,
+        db_comment="密码登录失败记录自增主键",
+    )
+    phone_hash = models.CharField(
+        max_length=64,
+        unique=True,
+        db_comment="登录手机号 HMAC 摘要，不保存明文手机号",
+    )
+    failed_count = models.PositiveIntegerField(
+        default=0,
+        db_comment="当前失败窗口内连续密码错误次数",
+    )
+    last_failed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_comment="最近一次密码错误时间",
+    )
+    locked_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_comment="密码登录临时锁定截止时间；空值表示未锁定",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_comment="密码登录失败记录创建时间",
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        db_comment="密码登录失败记录最近更新时间",
+    )
+
+    class Meta:
+        db_table = "password_login_attempts"
+        db_table_comment = "账号密码登录失败次数和锁定状态表"
+
+
 class AuthToken(models.Model):
     """不透明访问和刷新令牌记录表。"""
 
@@ -396,4 +445,297 @@ class AuthToken(models.Model):
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["session_id", "token_type"]),
             models.Index(fields=["user", "expires_at"]),
+        ]
+
+
+class AccountDeletionRecord(models.Model):
+    """账号注销结果、条件快照和清理审计记录。"""
+
+    class Status(models.TextChoices):
+        COMPLETED = "COMPLETED", "注销完成"
+
+    id = models.BigAutoField(
+        primary_key=True,
+        db_comment="账号注销审计自增主键",
+    )
+    request_no = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        db_comment="对外账号注销业务 UUID",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="deletion_records",
+        db_comment="被注销用户；保留用户主键以关联依法留存的交易和安全记录",
+    )
+    phone_masked = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_comment="注销前脱敏手机号审计快照，不保存明文手机号",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.COMPLETED,
+        db_comment="账号注销审计状态",
+    )
+    deletion_mode = models.CharField(
+        max_length=32,
+        default="USER_NORMAL",
+        db_comment="注销方式：用户正常注销或管理员强制注销",
+    )
+    operator_user_id = models.BigIntegerField(
+        null=True,
+        blank=True,
+        db_comment="执行强制注销或资金清空的管理员用户主键",
+    )
+    reason = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        db_comment="管理员强制注销或资金处理原因",
+    )
+    conditions_snapshot = models.JSONField(
+        default=dict,
+        db_comment="注销执行前四项条件检查结果快照",
+    )
+    cleanup_counts = models.JSONField(
+        default=dict,
+        db_comment="个人资料、登录绑定和内容清理数量快照",
+    )
+    cleared_amount_minor = models.BigIntegerField(
+        default=0,
+        db_comment="强制注销时清空的账户余额合计，单位为分",
+    )
+    retained_categories = models.JSONField(
+        default=list,
+        db_comment="依法保留或匿名化的交易、安全、聊天和审计数据类别",
+    )
+    verification_request_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_comment="注销确认使用的验证码请求 UUID",
+    )
+    request_fingerprint = models.CharField(
+        max_length=64,
+        db_comment="注销请求和条件结果一致性摘要，用于重复请求去重",
+    )
+    trace_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="注销请求追踪标识",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_comment="账号注销审计创建时间",
+    )
+    completed_at = models.DateTimeField(
+        auto_now_add=True,
+        db_comment="账号注销执行完成时间",
+    )
+
+    class Meta:
+        db_table = "account_deletion_records"
+        db_table_comment = "账号注销条件快照和清理审计表"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["user"],
+                name="uniq_account_deletion_user_completed",
+            )
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["user", "created_at"]),
+        ]
+
+
+class AccountSecurityEvent(models.Model):
+    """账号密码、手机号和会话安全操作的不可变审计事件。"""
+
+    id = models.BigAutoField(
+        primary_key=True,
+        db_comment="账号安全事件自增主键",
+    )
+    event_no = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        db_comment="对外账号安全事件 UUID",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="security_events",
+        db_comment="账号安全事件所属用户",
+    )
+    event_type = models.CharField(
+        max_length=64,
+        db_comment="安全事件类型，例如密码修改或手机号更换",
+    )
+    status = models.CharField(
+        max_length=16,
+        default="SUCCESS",
+        db_comment="安全事件结果：成功或失败",
+    )
+    old_phone_masked = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_comment="变更前手机号脱敏值，不保存明文手机号",
+    )
+    new_phone_masked = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_comment="变更后手机号脱敏值，不保存明文手机号",
+    )
+    result_code = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        db_comment="安全事件业务结果码；不保存密码、验证码或令牌",
+    )
+    request_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_comment="验证码或换绑请求 UUID",
+    )
+    idempotency_key = models.CharField(
+        max_length=128,
+        null=True,
+        blank=True,
+        db_comment="账号安全写操作幂等键",
+    )
+    request_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="账号安全写操作请求一致性摘要",
+    )
+    trace_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="账号安全请求追踪标识",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_comment="账号安全事件创建时间",
+    )
+
+    class Meta:
+        db_table = "account_security_events"
+        db_table_comment = "账号密码、手机号和会话安全审计表"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["user", "event_type", "idempotency_key"],
+                condition=models.Q(idempotency_key__isnull=False),
+                name="uniq_account_security_user_event_idempotency",
+            )
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["event_type", "created_at"]),
+        ]
+
+
+class PhoneChangeRequest(models.Model):
+    """更换绑定手机号的双验证码确认请求。"""
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "待确认"
+        CONFIRMED = "CONFIRMED", "已确认"
+        CANCELED = "CANCELED", "已取消"
+        EXPIRED = "EXPIRED", "已过期"
+
+    id = models.BigAutoField(
+        primary_key=True,
+        db_comment="手机号更换请求自增主键",
+    )
+    request_no = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        db_comment="对外手机号更换请求 UUID",
+    )
+    user = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name="phone_change_requests",
+        db_comment="申请更换手机号的用户",
+    )
+    new_phone_hash = models.CharField(
+        max_length=64,
+        db_comment="新手机号 HMAC 摘要，不保存明文手机号",
+    )
+    new_phone_masked = models.CharField(
+        max_length=16,
+        db_comment="新手机号脱敏展示值",
+    )
+    new_phone_encrypted = models.TextField(
+        db_comment="新手机号 Fernet 密文；确认成功后写入用户表并清除该请求密文",
+    )
+    old_phone_masked = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_comment="变更前手机号脱敏审计快照",
+    )
+    verification_mode = models.CharField(
+        max_length=32,
+        default="DUAL_SMS",
+        db_comment="换绑验证方式：新旧手机号双验证码或当前密码加新手机号验证码",
+    )
+    old_verification_request_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_comment="原手机号验证码请求 UUID",
+    )
+    new_verification_request_id = models.UUIDField(
+        db_comment="新手机号验证码请求 UUID",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_comment="手机号更换请求状态",
+    )
+    expires_at = models.DateTimeField(db_comment="双验证码确认过期时间")
+    idempotency_key = models.CharField(
+        max_length=128,
+        db_comment="手机号更换申请幂等键",
+    )
+    request_fingerprint = models.CharField(
+        max_length=64,
+        db_comment="原手机号、新手机号和验证方式一致性摘要",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        db_comment="手机号更换请求创建时间",
+    )
+    confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_comment="手机号更换确认完成时间",
+    )
+
+    class Meta:
+        db_table = "phone_change_requests"
+        db_table_comment = "更换绑定手机号双验证码确认请求表"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["user", "idempotency_key"],
+                name="uniq_phone_change_user_idempotency",
+            ),
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(status="PENDING"),
+                name="uniq_phone_change_user_pending",
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["user", "status", "created_at"]),
         ]

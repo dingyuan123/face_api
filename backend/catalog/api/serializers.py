@@ -82,6 +82,7 @@ class ServiceResponseSerializer(serializers.Serializer):
     version = serializers.IntegerField(help_text="服务版本号")
     title = serializers.CharField(help_text="服务名称")
     category_code = serializers.CharField(help_text="服务类目代码")
+    category = ServiceCategoryResponseSerializer(help_text="服务类目代码和中文展示信息")
     pricing_unit = serializers.CharField(help_text="计价单位，当前固定为 HOUR 按小时计价")
     price = MoneySerializer(help_text="服务每小时价格")
     price_display = serializers.CharField(help_text="只读每小时价格展示字符串，不作为提交值")
@@ -90,8 +91,13 @@ class ServiceResponseSerializer(serializers.Serializer):
     cover_media = MediaAssetSummarySerializer(help_text="服务封面媒体摘要")
     gallery_media = MediaAssetSummarySerializer(many=True, help_text="服务图集媒体摘要")
     tag_codes = serializers.ListField(child=serializers.CharField(), help_text="服务标签代码")
+    tags = ServiceTagResponseSerializer(
+        many=True,
+        help_text="服务标签代码、名称和分类",
+    )
     location_type = serializers.CharField(help_text="服务地点类型")
     status = serializers.CharField(help_text="服务状态")
+    status_text = serializers.CharField(help_text="服务状态中文含义")
     reject_reason = serializers.CharField(help_text="审核拒绝原因")
     sold_count = serializers.IntegerField(help_text="累计已售数量，只读")
     updated_at = serializers.DateTimeField(help_text="服务最近更新时间")

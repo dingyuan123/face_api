@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from backend.common.env import get_bool, get_int, get_list, get_text, load_environment
@@ -10,6 +11,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 load_environment(PROJECT_ROOT / ".env")
 
 ENVIRONMENT = get_text("DJANGO_ENV", "development") or "development"
+ADMIN_CAPTCHA_ENABLED = get_bool("ADMIN_CAPTCHA_ENABLED", ENVIRONMENT != "production")
 APP_VERSION = get_text("APP_VERSION", "0.1.0") or "0.1.0"
 SECRET_KEY = get_text("DJANGO_SECRET_KEY", "dev-only-secret-key-change-me") or ""
 DEBUG = get_bool("DJANGO_DEBUG", ENVIRONMENT != "production")
@@ -69,6 +71,8 @@ INSTALLED_APPS = [
     "backend.messaging",
     "backend.referrals",
     "backend.adminops",
+    "backend.moderation",
+    "backend.support",
 ]
 
 MIDDLEWARE = [
@@ -116,6 +120,16 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_TIME_LIMIT = 60 * 20
 CELERY_TASK_SOFT_TIME_LIMIT = 60 * 15
+CELERY_BEAT_SCHEDULE = {
+    "settle-due-referral-rewards": {
+        "task": "backend.referrals.tasks.settle_referral_rewards_task",
+        "schedule": timedelta(minutes=5),
+    },
+    "cleanup-expired-referral-visits": {
+        "task": "backend.referrals.tasks.cleanup_referral_visits_task",
+        "schedule": timedelta(hours=24),
+    },
+}
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -138,10 +152,26 @@ OAUTH_SUBJECT_HASH_KEY = get_text("OAUTH_SUBJECT_HASH_KEY", "dev-only-oauth-subj
 PHONE_HASH_KEY = get_text("PHONE_HASH_KEY", "dev-only-phone-hash-key") or ""
 SMS_MOCK_SIGNING_KEY = get_text("SMS_MOCK_SIGNING_KEY", "dev-only-sms-mock-signing-key") or ""
 SMS_MOCK_ENABLED = get_bool("SMS_MOCK_ENABLED", ENVIRONMENT != "production")
+SMS_PROVIDER = (get_text("SMS_PROVIDER", "MOCK") or "MOCK").upper()
+ALIYUN_SMS_ACCESS_KEY_ID = get_text("ALIYUN_SMS_ACCESS_KEY_ID", "") or ""
+ALIYUN_SMS_ACCESS_KEY_SECRET = get_text("ALIYUN_SMS_ACCESS_KEY_SECRET", "") or ""
+ALIYUN_SMS_REGION_ID = get_text("ALIYUN_SMS_REGION_ID", "cn-hangzhou") or "cn-hangzhou"
+ALIYUN_SMS_ENDPOINT = (
+    get_text(
+        "ALIYUN_SMS_ENDPOINT",
+        "https://dysmsapi.aliyuncs.com",
+    )
+    or "https://dysmsapi.aliyuncs.com"
+)
+ALIYUN_SMS_SIGN_NAME = get_text("ALIYUN_SMS_SIGN_NAME", "") or ""
+ALIYUN_SMS_TEMPLATE_CODE = get_text("ALIYUN_SMS_TEMPLATE_CODE", "") or ""
+ALIYUN_SMS_TEMPLATE_PARAM_KEY = get_text("ALIYUN_SMS_TEMPLATE_PARAM_KEY", "code") or "code"
 DEV_PASSWORD_LOGIN_ENABLED = ENVIRONMENT != "production" and get_bool(
     "ENABLE_DEV_PASSWORD_LOGIN",
     ENVIRONMENT != "production",
 )
+PASSWORD_LOGIN_MAX_FAILURES = get_int("PASSWORD_LOGIN_MAX_FAILURES", 5)
+PASSWORD_LOGIN_LOCK_SECONDS = get_int("PASSWORD_LOGIN_LOCK_SECONDS", 15 * 60)
 SMS_CODE_TTL_SECONDS = get_int("SMS_CODE_TTL_SECONDS", 300)
 SMS_CODE_RESEND_SECONDS = get_int("SMS_CODE_RESEND_SECONDS", 60)
 SMS_CODE_MAX_ATTEMPTS = get_int("SMS_CODE_MAX_ATTEMPTS", 5)

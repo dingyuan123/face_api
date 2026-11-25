@@ -23,6 +23,7 @@ class ChatOrderSummarySerializer(serializers.Serializer):
 
     order_no = serializers.UUIDField(help_text="关联订单 UUID")
     status = serializers.CharField(help_text="订单当前状态")
+    status_text = serializers.CharField(help_text="订单当前状态中文含义")
     service_title = serializers.CharField(help_text="订单服务名称")
     cover_media = MediaAssetSummarySerializer(
         allow_null=True,
@@ -41,7 +42,9 @@ class MessageResponseSerializer(serializers.Serializer):
         help_text="发送者公开 UUID；系统消息为空",
     )
     sender_role = serializers.CharField(help_text="发送者订单角色")
+    sender_role_text = serializers.CharField(help_text="发送者订单角色中文含义")
     message_type = serializers.CharField(help_text="消息类型：TEXT、IMAGE 或 SYSTEM")
+    message_type_text = serializers.CharField(help_text="消息类型中文含义")
     content = serializers.CharField(help_text="文本内容或图片说明")
     media = MediaAssetSummarySerializer(allow_null=True, help_text="图片消息媒体")
     client_message_id = serializers.CharField(
@@ -67,6 +70,7 @@ class ConversationResponseSerializer(serializers.Serializer):
     order_count = serializers.IntegerField(help_text="双方已关联的聊天资格订单数")
     participants = ChatUserSummarySerializer(many=True, help_text="用户与服务者公开资料")
     status = serializers.CharField(help_text="会话状态：OPEN、READ_ONLY 或 CLOSED")
+    status_text = serializers.CharField(help_text="会话状态中文含义")
     can_send = serializers.BooleanField(help_text="当前用户是否仍可发送消息")
     close_reason = serializers.CharField(help_text="只读或关闭原因；正常发送时为空")
     latest_sequence = serializers.IntegerField(help_text="当前最新消息序号")
