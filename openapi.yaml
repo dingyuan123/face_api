@@ -302,6 +302,194 @@ paths:
               schema:
                 $ref: '#/components/schemas/AdminCommissionTrendsResponse'
           description: ''
+  /admin/v1/coupons/{coupon_no}/revoke/:
+    post:
+      operationId: adminRevokeCoupon
+      description: 管理员撤销未使用优惠券。
+      summary: 撤销优惠券
+      parameters:
+      - in: path
+        name: coupon_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCouponRevokeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminCouponRevokeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminCouponRevokeRequestRequest'
+        required: true
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CouponResponse'
+          description: ''
+  /admin/v1/coupons/issue/:
+    post:
+      operationId: adminIssueCoupon
+      description: 管理员向指定用户发放优惠券。
+      summary: 管理员发放优惠券
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCouponIssueRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminCouponIssueRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminCouponIssueRequestRequest'
+        required: true
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCouponIssueResponse'
+          description: ''
+  /admin/v1/coupons/redemptions/:
+    get:
+      operationId: adminListCouponRedemptions
+      description: 管理员查询优惠券订单核销记录。
+      summary: 查询优惠券核销记录
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 页码
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 每页数量
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 核销状态筛选
+      tags:
+      - admin
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CouponRedemptionListResponse'
+          description: ''
+  /admin/v1/coupons/templates/:
+    get:
+      operationId: adminListCouponTemplates
+      description: 管理员查询和创建优惠券模板。
+      summary: 查询优惠券模板
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 页码
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 每页数量
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 模板状态筛选
+      tags:
+      - admin
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCouponTemplateListResponse'
+          description: ''
+    post:
+      operationId: adminCreateCouponTemplate
+      description: 管理员查询和创建优惠券模板。
+      summary: 创建优惠券模板
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCouponTemplateCreateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminCouponTemplateCreateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminCouponTemplateCreateRequestRequest'
+        required: true
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCouponTemplateResponse'
+          description: ''
+  /admin/v1/coupons/templates/{template_no}/:
+    patch:
+      operationId: adminUpdateCouponTemplate
+      description: 管理员修改优惠券模板。
+      summary: 修改优惠券模板
+      parameters:
+      - in: path
+        name: template_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminCouponTemplateUpdateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminCouponTemplateUpdateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminCouponTemplateUpdateRequestRequest'
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCouponTemplateResponse'
+          description: ''
   /admin/v1/dashboard/overview/:
     get:
       operationId: admin_v1_dashboard_overview_retrieve
@@ -448,6 +636,115 @@ paths:
               schema:
                 type: string
                 format: binary
+          description: ''
+  /admin/v1/membership/plans/:
+    get:
+      operationId: adminListMembershipPlans
+      description: 管理员查询和创建会员套餐。
+      summary: 查询会员套餐配置
+      tags:
+      - admin
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPlanListResponse'
+          description: ''
+    post:
+      operationId: adminCreateMembershipPlan
+      description: 管理员查询和创建会员套餐。
+      summary: 创建会员套餐
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminMembershipPlanCreateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AdminMembershipPlanCreateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AdminMembershipPlanCreateRequestRequest'
+        required: true
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPlanResponse'
+          description: ''
+  /admin/v1/membership/plans/{plan_no}/:
+    patch:
+      operationId: adminUpdateMembershipPlan
+      description: 管理员修改会员套餐并生成新的商业版本。
+      summary: 修改会员套餐
+      parameters:
+      - in: path
+        name: plan_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminMembershipPlanUpdateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminMembershipPlanUpdateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminMembershipPlanUpdateRequestRequest'
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPlanResponse'
+          description: ''
+  /admin/v1/membership/purchases/:
+    get:
+      operationId: adminListMembershipPurchases
+      description: 管理员查询会员购买记录；会员购买不允许退款。
+      summary: 查询会员购买记录
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 页码
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 每页数量
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 购买状态筛选
+      tags:
+      - admin
+      security:
+      - AdminBearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminMembershipPurchaseListResponse'
           description: ''
   /admin/v1/orders/:
     get:
@@ -4266,6 +4563,101 @@ paths:
               schema:
                 $ref: '#/components/schemas/ConversationReadResponse'
           description: ''
+  /api/v1/coupon-templates/{template_no}/claim/:
+    post:
+      operationId: claimCoupon
+      description: 用户领取可领取优惠券。
+      summary: 领取优惠券
+      parameters:
+      - in: path
+        name: template_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CouponClaimRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CouponClaimRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CouponClaimRequestRequest'
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CouponClaimResponse'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CouponClaimResponse'
+          description: ''
+  /api/v1/coupons/:
+    get:
+      operationId: listMyCoupons
+      description: 当前用户优惠券列表。
+      summary: 查询我的优惠券
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 页码
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 每页数量
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: AVAILABLE、USED、EXPIRED 或 ALL，默认 AVAILABLE
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CouponListResponse'
+          description: ''
+  /api/v1/coupons/{coupon_no}/:
+    get:
+      operationId: getCoupon
+      description: 当前用户优惠券详情。
+      summary: 查询优惠券详情
+      parameters:
+      - in: path
+        name: coupon_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CouponResponse'
+          description: ''
   /api/v1/dev/auth/password-login/:
     post:
       operationId: v1_dev_auth_password_login_create
@@ -4829,6 +5221,121 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MediaAssetResponse'
+          description: ''
+  /api/v1/membership/:
+    get:
+      operationId: getMembershipSummary
+      description: 普通用户查询会员中心状态和权益。
+      summary: 查询我的会员状态
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipSummaryResponse'
+          description: ''
+  /api/v1/membership/plans/:
+    get:
+      operationId: listMembershipPlans
+      description: 普通用户查询可购买会员套餐。
+      summary: 查询会员套餐
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPlanListResponse'
+          description: ''
+  /api/v1/membership/purchases/:
+    get:
+      operationId: listMembershipPurchases
+      description: 普通用户查询购买历史和发起会员购买。
+      summary: 查询会员购买历史
+      parameters:
+      - in: query
+        name: page
+        schema:
+          type: integer
+        description: 页码
+      - in: query
+        name: page_size
+        schema:
+          type: integer
+        description: 每页数量
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPurchaseListResponse'
+          description: ''
+    post:
+      operationId: createMembershipPurchase
+      description: 普通用户查询购买历史和发起会员购买。
+      summary: 购买或续费会员
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MembershipPurchaseCreateRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MembershipPurchaseCreateRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MembershipPurchaseCreateRequestRequest'
+        required: true
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPurchaseResult'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPurchaseResult'
+          description: ''
+  /api/v1/membership/purchases/{purchase_no}/:
+    get:
+      operationId: getMembershipPurchase
+      description: 普通用户查询本人会员购买单。
+      summary: 查询会员购买详情
+      parameters:
+      - in: path
+        name: purchase_no
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - v1
+      security:
+      - BearerTokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipPurchaseResponse'
           description: ''
   /api/v1/messaging/conversations/providers/{provider_public_id}/:
     get:
@@ -8835,6 +9342,308 @@ components:
       - name
       - sort_order
       - version
+    AdminCouponIssueRequestRequest:
+      type: object
+      description: 管理员向用户发放优惠券请求。
+      properties:
+        user_public_id:
+          type: string
+          format: uuid
+          description: 目标用户公开 UUID
+        template_no:
+          type: string
+          format: uuid
+          description: 优惠券模板 UUID
+        source_no:
+          type: string
+          description: 可选发放来源业务单号，用于幂等去重
+          maxLength: 64
+        valid_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: 可选券有效期开始时间，仅领取后生效模板允许覆盖
+        valid_to:
+          type: string
+          format: date-time
+          nullable: true
+          description: 可选券有效期截止时间，仅领取后生效模板允许覆盖
+      required:
+      - template_no
+      - user_public_id
+    AdminCouponIssueResponse:
+      type: object
+      description: 管理员发放优惠券结果。
+      properties:
+        coupon:
+          allOf:
+          - $ref: '#/components/schemas/CouponResponse'
+          description: 发放的用户优惠券
+        created:
+          type: boolean
+          description: 是否新建券实例
+      required:
+      - coupon
+      - created
+    AdminCouponRevokeRequestRequest:
+      type: object
+      description: 管理员撤销未使用优惠券请求。
+      properties:
+        reason:
+          type: string
+          minLength: 2
+          description: 撤销原因
+          maxLength: 500
+        expected_version:
+          type: integer
+          minimum: 1
+          description: 撤销前券实例版本号
+      required:
+      - expected_version
+      - reason
+    AdminCouponTemplateCreateRequestRequest:
+      type: object
+      description: 管理员创建优惠券模板请求。
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: 模板稳定代码
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          description: 优惠券展示名称
+          maxLength: 100
+        description:
+          type: string
+          description: 优惠券使用说明
+          maxLength: 500
+        discount_type:
+          allOf:
+          - $ref: '#/components/schemas/DiscountTypeEnum'
+          default: FIXED_AMOUNT
+          description: |-
+            优惠类型，当前仅支持固定金额
+
+            * `FIXED_AMOUNT` - FIXED_AMOUNT
+        currency:
+          type: string
+          minLength: 1
+          default: CNY
+          description: 币种
+          maxLength: 3
+        discount_amount_minor:
+          type: integer
+          minimum: 1
+          description: 固定优惠金额，单位为分
+        min_spend_amount_minor:
+          type: integer
+          minimum: 0
+          default: 0
+          description: 最低消费门槛，单位为分
+        scope_type:
+          allOf:
+          - $ref: '#/components/schemas/ScopeTypeEnum'
+          default: ALL
+          description: |-
+            适用范围类型
+
+            * `ALL` - ALL
+            * `CITY` - CITY
+            * `SERVICE_CATEGORY` - SERVICE_CATEGORY
+            * `SERVICE` - SERVICE
+            * `PROVIDER` - PROVIDER
+        scope_value:
+          type: string
+          description: 适用城市、类目、服务或服务者代码
+          maxLength: 100
+        validity_type:
+          allOf:
+          - $ref: '#/components/schemas/ValidityTypeEnum'
+          default: FIXED_PERIOD
+          description: |-
+            有效期类型
+
+            * `FIXED_PERIOD` - FIXED_PERIOD
+            * `ISSUE_RELATIVE` - ISSUE_RELATIVE
+        valid_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: 固定有效期开始时间
+        valid_to:
+          type: string
+          format: date-time
+          nullable: true
+          description: 固定有效期截止时间
+        validity_days:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: 领取后有效天数
+        total_issue_limit:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: 发放总量上限
+        per_user_issue_limit:
+          type: integer
+          minimum: 0
+          default: 1
+          description: 单用户领取上限，0 表示不限制
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status216Enum'
+          default: DRAFT
+          description: |-
+            模板状态
+
+            * `DRAFT` - DRAFT
+            * `ACTIVE` - ACTIVE
+            * `PAUSED` - PAUSED
+            * `ENDED` - ENDED
+      required:
+      - code
+      - discount_amount_minor
+      - name
+    AdminCouponTemplateListResponse:
+      type: object
+      description: 管理员优惠券模板分页响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminCouponTemplateResponse'
+          description: 优惠券模板列表
+        total:
+          type: integer
+          description: 模板总数
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页数量
+      required:
+      - items
+      - page
+      - page_size
+      - total
+    AdminCouponTemplateResponse:
+      type: object
+      description: 管理员优惠券模板配置。
+      properties:
+        template_no:
+          type: string
+          format: uuid
+          description: 优惠券模板 UUID
+        code:
+          type: string
+          description: 模板稳定代码
+        name:
+          type: string
+          description: 优惠券展示名称
+        description:
+          type: string
+          description: 优惠券使用说明
+        discount_type:
+          type: string
+          description: 优惠类型
+        discount_type_text:
+          type: string
+          description: 优惠类型中文含义
+        currency:
+          type: string
+          description: 优惠金额币种
+        discount_amount_minor:
+          type: integer
+          description: 固定优惠金额，单位为分
+        min_spend_amount_minor:
+          type: integer
+          description: 最低消费门槛，单位为分
+        scope_type:
+          type: string
+          description: 适用范围类型
+        scope_type_text:
+          type: string
+          description: 适用范围中文含义
+        scope_value:
+          type: string
+          description: 适用范围代码
+        validity_type:
+          type: string
+          description: 有效期类型
+        validity_type_text:
+          type: string
+          description: 有效期类型中文含义
+        valid_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: 固定有效期开始时间
+        valid_to:
+          type: string
+          format: date-time
+          nullable: true
+          description: 固定有效期截止时间
+        validity_days:
+          type: integer
+          nullable: true
+          description: 领取后有效天数
+        total_issue_limit:
+          type: integer
+          nullable: true
+          description: 发放总量上限
+        per_user_issue_limit:
+          type: integer
+          description: 单用户领取上限
+        issued_count:
+          type: integer
+          description: 累计发放数量
+        status:
+          type: string
+          description: 模板状态
+        status_text:
+          type: string
+          description: 模板状态中文含义
+        version:
+          type: integer
+          description: 模板版本号
+        created_at:
+          type: string
+          format: date-time
+          description: 模板创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 模板最近更新时间
+      required:
+      - code
+      - created_at
+      - currency
+      - description
+      - discount_amount_minor
+      - discount_type
+      - discount_type_text
+      - issued_count
+      - min_spend_amount_minor
+      - name
+      - per_user_issue_limit
+      - scope_type
+      - scope_type_text
+      - scope_value
+      - status
+      - status_text
+      - template_no
+      - total_issue_limit
+      - updated_at
+      - valid_from
+      - valid_to
+      - validity_days
+      - validity_type
+      - validity_type_text
+      - version
     AdminDashboardResponse:
       type: object
       description: 后台经营概览。
@@ -9221,6 +10030,76 @@ components:
       - menu_version
       - permissions
       - roles
+    AdminMembershipPlanCreateRequestRequest:
+      type: object
+      description: 管理员创建会员套餐请求。
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: 会员套餐稳定代码
+          maxLength: 32
+        name:
+          type: string
+          minLength: 1
+          description: 会员套餐展示名称
+          maxLength: 100
+        description:
+          type: string
+          description: 会员套餐展示说明
+          maxLength: 500
+        duration_days:
+          type: integer
+          minimum: 1
+          description: 套餐有效天数
+        currency:
+          type: string
+          minLength: 1
+          default: CNY
+          description: 币种
+          maxLength: 3
+        price_amount_minor:
+          type: integer
+          minimum: 1
+          description: 套餐价格，单位为分
+        benefits:
+          type: array
+          items: {}
+          description: 会员权益配置列表
+        sort_order:
+          type: integer
+          minimum: 0
+          default: 0
+          description: 展示排序值
+      required:
+      - benefits
+      - code
+      - duration_days
+      - name
+      - price_amount_minor
+    AdminMembershipPurchaseListResponse:
+      type: object
+      description: 管理员会员购买记录分页响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MembershipPurchaseResponse'
+          description: 会员购买记录
+        total:
+          type: integer
+          description: 购买记录总数
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页数量
+      required:
+      - items
+      - page
+      - page_size
+      - total
     AdminMomentListResponse:
       type: object
       description: 管理员动态列表响应。
@@ -11401,6 +12280,240 @@ components:
       description: |-
         * `GCJ02` - GCJ02
         * `WGS84` - WGS84
+    CouponClaimRequestRequest:
+      type: object
+      description: 用户领取优惠券请求。
+      properties:
+        idempotency_key:
+          type: string
+          description: 可选领取幂等键；未提供时建议客户端通过 Idempotency-Key 请求头传入
+          maxLength: 128
+    CouponClaimResponse:
+      type: object
+      description: 用户领取优惠券结果。
+      properties:
+        coupon:
+          allOf:
+          - $ref: '#/components/schemas/CouponResponse'
+          description: 领取的用户优惠券
+        created:
+          type: boolean
+          description: 是否新建券；幂等重放时为 false
+        reused:
+          type: boolean
+          description: 是否复用相同幂等领取请求
+      required:
+      - coupon
+      - created
+      - reused
+    CouponListResponse:
+      type: object
+      description: 用户优惠券分页响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CouponResponse'
+          description: 优惠券列表
+        total:
+          type: integer
+          description: 优惠券总数
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页数量
+        status:
+          type: string
+          description: 当前优惠券状态筛选
+      required:
+      - items
+      - page
+      - page_size
+      - status
+      - total
+    CouponRedemptionListResponse:
+      type: object
+      description: 优惠券核销记录分页响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CouponRedemptionResponse'
+          description: 优惠券核销记录列表
+        total:
+          type: integer
+          description: 记录总数
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页数量
+      required:
+      - items
+      - page
+      - page_size
+      - total
+    CouponRedemptionResponse:
+      type: object
+      description: 优惠券订单锁定、核销和释放记录。
+      properties:
+        redemption_no:
+          type: string
+          format: uuid
+          description: 优惠券核销记录 UUID
+        coupon_no:
+          type: string
+          format: uuid
+          description: 用户优惠券 UUID
+        coupon_name:
+          type: string
+          description: 优惠券展示名称
+        order_no:
+          type: string
+          description: 关联订单业务 UUID
+        status:
+          type: string
+          description: 核销状态
+        status_text:
+          type: string
+          description: 核销状态中文含义
+        currency:
+          type: string
+          description: 金额币种
+        original_amount_minor:
+          type: integer
+          description: 优惠前原价，单位为分
+        discount_amount_minor:
+          type: integer
+          description: 优惠金额，单位为分
+        payable_amount_minor:
+          type: integer
+          description: 优惠后应付金额，单位为分
+        reserved_at:
+          type: string
+          format: date-time
+          description: 下单锁定时间
+        used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付核销时间
+        released_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 订单释放时间
+      required:
+      - coupon_name
+      - coupon_no
+      - currency
+      - discount_amount_minor
+      - order_no
+      - original_amount_minor
+      - payable_amount_minor
+      - redemption_no
+      - released_at
+      - reserved_at
+      - status
+      - status_text
+      - used_at
+    CouponResponse:
+      type: object
+      description: 用户优惠券实例和使用条件。
+      properties:
+        coupon_no:
+          type: string
+          format: uuid
+          description: 用户优惠券 UUID
+        template_no:
+          type: string
+          format: uuid
+          description: 优惠券模板 UUID
+        code:
+          type: string
+          description: 优惠券模板稳定代码
+        name:
+          type: string
+          description: 优惠券展示名称
+        status:
+          type: string
+          description: 优惠券状态
+        status_text:
+          type: string
+          description: 优惠券状态中文含义
+        currency:
+          type: string
+          description: 优惠金额币种
+        discount_amount_minor:
+          type: integer
+          description: 固定优惠金额，单位为分
+        min_spend_amount_minor:
+          type: integer
+          description: 最低使用门槛，单位为分
+        scope_type:
+          type: string
+          description: 适用范围类型
+        scope_type_text:
+          type: string
+          description: 适用范围中文含义
+        scope_value:
+          type: string
+          description: 适用城市、类目、服务或服务者代码
+        valid_from:
+          type: string
+          format: date-time
+          description: 优惠券可用开始时间
+        valid_to:
+          type: string
+          format: date-time
+          description: 优惠券可用截止时间
+        source_type:
+          type: string
+          description: 优惠券发放来源
+        source_type_text:
+          type: string
+          description: 优惠券发放来源中文含义
+        issued_at:
+          type: string
+          format: date-time
+          description: 优惠券发放时间
+        used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 优惠券使用时间
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 优惠券撤销时间
+        version:
+          type: integer
+          description: 优惠券实例版本号
+      required:
+      - code
+      - coupon_no
+      - currency
+      - discount_amount_minor
+      - issued_at
+      - min_spend_amount_minor
+      - name
+      - revoked_at
+      - scope_type
+      - scope_type_text
+      - scope_value
+      - source_type
+      - source_type_text
+      - status
+      - status_text
+      - template_no
+      - used_at
+      - valid_from
+      - valid_to
+      - version
     DevPasswordLoginRequestRequest:
       type: object
       description: 开发测试账号密码登录请求；生产环境接口不可用。
@@ -11418,6 +12531,11 @@ components:
       required:
       - password
       - phone
+    DiscountTypeEnum:
+      enum:
+      - FIXED_AMOUNT
+      type: string
+      description: '* `FIXED_AMOUNT` - FIXED_AMOUNT'
     DisplayStatusEnum:
       enum:
       - ACTIVE
@@ -12572,6 +13690,385 @@ components:
       required:
       - file
       - purpose
+    MembershipBenefitResponse:
+      type: object
+      description: 当前会员权益发放摘要。
+      properties:
+        grant_no:
+          type: string
+          format: uuid
+          description: 权益发放 UUID
+        code:
+          type: string
+          description: 权益稳定代码
+        status:
+          type: string
+          description: 权益发放状态
+        status_text:
+          type: string
+          description: 权益发放状态中文含义
+        payload:
+          type: object
+          additionalProperties: {}
+          description: 权益参数和关联券实例摘要
+      required:
+      - code
+      - grant_no
+      - payload
+      - status
+      - status_text
+    MembershipPaymentResponse:
+      type: object
+      description: 会员购买关联支付单安全摘要。
+      properties:
+        payment_no:
+          type: string
+          format: uuid
+          description: 支付单 UUID
+        order_no:
+          type: string
+          description: 兼容业务单号
+        business_type:
+          type: string
+          description: 支付业务类型
+        business_no:
+          type: string
+          description: 支付业务单号
+        payment_method:
+          type: string
+          description: 支付方式
+        payment_method_text:
+          type: string
+          description: 支付方式中文含义
+        payment_channel:
+          type: string
+          description: 支付渠道代码
+        currency:
+          type: string
+          description: 支付币种
+        amount_minor:
+          type: integer
+          description: 支付金额，单位为分
+        status:
+          type: string
+          description: 支付单状态
+        status_text:
+          type: string
+          description: 支付单状态中文含义
+        client_payload:
+          type: object
+          additionalProperties: {}
+          description: 原生支付 SDK 参数
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付参数失效时间
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付成功时间
+        version:
+          type: integer
+          description: 支付单版本号
+      required:
+      - amount_minor
+      - business_no
+      - business_type
+      - client_payload
+      - currency
+      - expires_at
+      - order_no
+      - paid_at
+      - payment_channel
+      - payment_method
+      - payment_method_text
+      - payment_no
+      - status
+      - status_text
+      - version
+    MembershipPeriodResponse:
+      type: object
+      description: 会员有效期周期。
+      properties:
+        period_no:
+          type: string
+          format: uuid
+          description: 会员有效期周期 UUID
+        purchase_no:
+          type: string
+          format: uuid
+          description: 关联会员购买单 UUID
+        plan:
+          type: object
+          additionalProperties: {}
+          description: 有效期对应套餐快照
+        status:
+          type: string
+          description: 有效期状态
+        status_text:
+          type: string
+          description: 有效期状态中文含义
+        starts_at:
+          type: string
+          format: date-time
+          description: 有效期开始时间
+        ends_at:
+          type: string
+          format: date-time
+          description: 有效期截止时间
+        activated_at:
+          type: string
+          format: date-time
+          description: 有效期首次生效时间
+        expired_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 有效期到期标记时间
+      required:
+      - activated_at
+      - ends_at
+      - expired_at
+      - period_no
+      - plan
+      - purchase_no
+      - starts_at
+      - status
+      - status_text
+    MembershipPlanListResponse:
+      type: object
+      description: 会员套餐列表响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MembershipPlanResponse'
+          description: 会员套餐列表
+      required:
+      - items
+    MembershipPlanResponse:
+      type: object
+      description: 会员套餐当前版本展示信息。
+      properties:
+        plan_no:
+          type: string
+          format: uuid
+          description: 会员套餐 UUID
+        code:
+          type: string
+          description: 会员套餐稳定代码
+        name:
+          type: string
+          description: 会员套餐展示名称
+        description:
+          type: string
+          description: 会员套餐展示说明
+        duration_days:
+          type: integer
+          description: 套餐有效天数
+        currency:
+          type: string
+          description: 套餐价格币种
+        price_amount_minor:
+          type: integer
+          description: 套餐价格，单位为分
+        benefits:
+          type: array
+          items: {}
+          description: 会员权益配置列表
+        status:
+          type: string
+          description: 套餐状态
+        status_text:
+          type: string
+          description: 套餐状态中文含义
+        sort_order:
+          type: integer
+          description: 套餐展示排序值
+        version:
+          type: integer
+          description: 套餐当前版本号
+      required:
+      - benefits
+      - code
+      - currency
+      - description
+      - duration_days
+      - name
+      - plan_no
+      - price_amount_minor
+      - sort_order
+      - status
+      - status_text
+      - version
+    MembershipPurchaseCreateRequestRequest:
+      type: object
+      description: 创建会员购买并发起支付请求。
+      properties:
+        plan_code:
+          type: string
+          minLength: 1
+          description: 会员套餐稳定代码
+          maxLength: 32
+        payment_method:
+          allOf:
+          - $ref: '#/components/schemas/PaymentMethodEnum'
+          description: |-
+            支付方式：钱包余额、微信 App 支付或支付宝 App 支付
+
+            * `BALANCE` - BALANCE
+            * `WECHAT_APP` - WECHAT_APP
+            * `ALIPAY_APP` - ALIPAY_APP
+      required:
+      - payment_method
+      - plan_code
+    MembershipPurchaseListResponse:
+      type: object
+      description: 会员购买历史分页响应。
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MembershipPurchaseResponse'
+          description: 会员购买历史
+        total:
+          type: integer
+          description: 购买记录总数
+        page:
+          type: integer
+          description: 当前页码
+        page_size:
+          type: integer
+          description: 每页数量
+      required:
+      - items
+      - page
+      - page_size
+      - total
+    MembershipPurchaseResponse:
+      type: object
+      description: 会员购买单响应。
+      properties:
+        purchase_no:
+          type: string
+          format: uuid
+          description: 会员购买单 UUID
+        status:
+          type: string
+          description: 购买单状态
+        status_text:
+          type: string
+          description: 购买单状态中文含义
+        plan:
+          type: object
+          additionalProperties: {}
+          description: 购买时套餐价格、时长和权益快照
+        currency:
+          type: string
+          description: 购买币种
+        amount_minor:
+          type: integer
+          description: 购买金额，单位为分
+        payment_no:
+          type: string
+          format: uuid
+          nullable: true
+          description: 关联支付单 UUID
+        payment:
+          allOf:
+          - $ref: '#/components/schemas/MembershipPaymentResponse'
+          nullable: true
+          description: 关联支付单；未创建支付时为空
+        version:
+          type: integer
+          description: 购买单版本号
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付成功时间
+        created_at:
+          type: string
+          format: date-time
+          description: 购买单创建时间
+        updated_at:
+          type: string
+          format: date-time
+          description: 购买单最近更新时间
+      required:
+      - amount_minor
+      - created_at
+      - currency
+      - paid_at
+      - payment
+      - payment_no
+      - plan
+      - purchase_no
+      - status
+      - status_text
+      - updated_at
+      - version
+    MembershipPurchaseResult:
+      type: object
+      description: 会员购买发起结果。
+      properties:
+        purchase:
+          allOf:
+          - $ref: '#/components/schemas/MembershipPurchaseResponse'
+          description: 会员购买单
+        payment:
+          allOf:
+          - $ref: '#/components/schemas/MembershipPaymentResponse'
+          description: 支付单及原生支付参数
+        payment_action:
+          allOf:
+          - $ref: '#/components/schemas/PaymentActionEnum'
+          description: |-
+            NONE 表示直接成功，NATIVE_PAY 表示需要调起支付 SDK
+
+            * `NONE` - NONE
+            * `NATIVE_PAY` - NATIVE_PAY
+        created:
+          type: boolean
+          description: 是否新建购买单
+        reused:
+          type: boolean
+          description: 是否复用相同幂等购买请求
+      required:
+      - created
+      - payment
+      - payment_action
+      - purchase
+      - reused
+    MembershipSummaryResponse:
+      type: object
+      description: 当前用户会员状态响应。
+      properties:
+        is_member:
+          type: boolean
+          description: 当前是否处于会员有效期
+        plan:
+          type: object
+          additionalProperties: {}
+          nullable: true
+          description: 当前会员套餐快照
+        period:
+          allOf:
+          - $ref: '#/components/schemas/MembershipPeriodResponse'
+          nullable: true
+          description: 当前会员有效期周期
+        benefits:
+          type: array
+          items:
+            $ref: '#/components/schemas/MembershipBenefitResponse'
+          description: 当前会员权益列表
+      required:
+      - benefits
+      - is_member
+      - period
+      - plan
     MessageAck:
       type: object
       description: 消息发送幂等确认。
@@ -14054,6 +15551,70 @@ components:
       description: |-
         * `USER` - USER
         * `PROVIDER` - PROVIDER
+    OrderCouponResponse:
+      type: object
+      description: 订单优惠券锁定或核销摘要。
+      properties:
+        redemption_no:
+          type: string
+          format: uuid
+          description: 优惠券核销记录 UUID
+        coupon_no:
+          type: string
+          format: uuid
+          description: 用户优惠券 UUID
+        coupon_name:
+          type: string
+          description: 优惠券展示名称
+        order_no:
+          type: string
+          description: 关联订单业务 UUID
+        status:
+          type: string
+          description: 优惠券核销状态
+        status_text:
+          type: string
+          description: 优惠券核销状态中文含义
+        currency:
+          type: string
+          description: 金额币种
+        original_amount_minor:
+          type: integer
+          description: 优惠前订单原价，单位为分
+        discount_amount_minor:
+          type: integer
+          description: 优惠金额，单位为分
+        payable_amount_minor:
+          type: integer
+          description: 优惠后应付金额，单位为分
+        reserved_at:
+          type: string
+          format: date-time
+          description: 订单创建锁定优惠券时间
+        used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 支付成功核销时间
+        released_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 订单取消释放时间
+      required:
+      - coupon_name
+      - coupon_no
+      - currency
+      - discount_amount_minor
+      - order_no
+      - original_amount_minor
+      - payable_amount_minor
+      - redemption_no
+      - released_at
+      - reserved_at
+      - status
+      - status_text
+      - used_at
     OrderCreateRequestRequest:
       type: object
       description: 预约订单创建请求。
@@ -14081,6 +15642,11 @@ components:
           type: string
           minLength: 1
           description: 地点搜索接口返回的短期地点选择凭证；订单只接受已过滤公共场所
+        coupon_no:
+          type: string
+          format: uuid
+          nullable: true
+          description: 可选用户优惠券 UUID；金额和服务端优惠金额由后端重新计算
       required:
       - expected_service_version
       - expected_slot_version
@@ -14485,6 +16051,11 @@ components:
         location_selection_token:
           type: string
           description: 可选的地点选择凭证，用于报价确认地点摘要
+        coupon_no:
+          type: string
+          format: uuid
+          nullable: true
+          description: 可选用户优惠券 UUID，用于试算服务端可享受的订单优惠
       required:
       - service_id
       - slot_id
@@ -14509,7 +16080,7 @@ components:
           description: 优惠前服务原价，单位为币种最小单位
         discount_amount_minor:
           type: integer
-          description: 优惠总额，当前为 0，单位为币种最小单位
+          description: 优惠总额，由服务端按优惠券规则计算，单位为币种最小单位
         platform_fee_amount_minor:
           type: integer
           description: 平台服务费，当前为 0，单位为币种最小单位
@@ -14775,6 +16346,11 @@ components:
           allOf:
           - $ref: '#/components/schemas/OrderPrice'
           description: 订单价格快照
+        coupon:
+          allOf:
+          - $ref: '#/components/schemas/OrderCouponResponse'
+          nullable: true
+          description: 订单优惠券锁定、核销或释放摘要；未使用优惠券时为空
         note:
           type: string
           description: 预约备注
@@ -14810,6 +16386,7 @@ components:
       required:
       - completed_at
       - contact
+      - coupon
       - created_at
       - meeting_location
       - note
@@ -15204,6 +16781,160 @@ components:
         expected_version:
           type: integer
           minimum: 1
+    PatchedAdminCouponTemplateUpdateRequestRequest:
+      type: object
+      description: 管理员修改优惠券模板请求。
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: 模板稳定代码
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          description: 优惠券展示名称
+          maxLength: 100
+        description:
+          type: string
+          description: 优惠券使用说明
+          maxLength: 500
+        discount_type:
+          allOf:
+          - $ref: '#/components/schemas/DiscountTypeEnum'
+          default: FIXED_AMOUNT
+          description: |-
+            优惠类型，当前仅支持固定金额
+
+            * `FIXED_AMOUNT` - FIXED_AMOUNT
+        currency:
+          type: string
+          minLength: 1
+          default: CNY
+          description: 币种
+          maxLength: 3
+        discount_amount_minor:
+          type: integer
+          minimum: 1
+          description: 固定优惠金额，单位为分
+        min_spend_amount_minor:
+          type: integer
+          minimum: 0
+          default: 0
+          description: 最低消费门槛，单位为分
+        scope_type:
+          allOf:
+          - $ref: '#/components/schemas/ScopeTypeEnum'
+          default: ALL
+          description: |-
+            适用范围类型
+
+            * `ALL` - ALL
+            * `CITY` - CITY
+            * `SERVICE_CATEGORY` - SERVICE_CATEGORY
+            * `SERVICE` - SERVICE
+            * `PROVIDER` - PROVIDER
+        scope_value:
+          type: string
+          description: 适用城市、类目、服务或服务者代码
+          maxLength: 100
+        validity_type:
+          allOf:
+          - $ref: '#/components/schemas/ValidityTypeEnum'
+          default: FIXED_PERIOD
+          description: |-
+            有效期类型
+
+            * `FIXED_PERIOD` - FIXED_PERIOD
+            * `ISSUE_RELATIVE` - ISSUE_RELATIVE
+        valid_from:
+          type: string
+          format: date-time
+          nullable: true
+          description: 固定有效期开始时间
+        valid_to:
+          type: string
+          format: date-time
+          nullable: true
+          description: 固定有效期截止时间
+        validity_days:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: 领取后有效天数
+        total_issue_limit:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: 发放总量上限
+        per_user_issue_limit:
+          type: integer
+          minimum: 0
+          default: 1
+          description: 单用户领取上限，0 表示不限制
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status216Enum'
+          default: DRAFT
+          description: |-
+            模板状态
+
+            * `DRAFT` - DRAFT
+            * `ACTIVE` - ACTIVE
+            * `PAUSED` - PAUSED
+            * `ENDED` - ENDED
+        expected_version:
+          type: integer
+          minimum: 1
+          description: 修改前模板版本号
+    PatchedAdminMembershipPlanUpdateRequestRequest:
+      type: object
+      description: 管理员修改会员套餐请求；商业字段变化生成新版本。
+      properties:
+        name:
+          type: string
+          minLength: 1
+          description: 会员套餐展示名称
+          maxLength: 100
+        description:
+          type: string
+          description: 会员套餐展示说明
+          maxLength: 500
+        duration_days:
+          type: integer
+          minimum: 1
+          description: 套餐有效天数
+        currency:
+          type: string
+          minLength: 1
+          description: 币种
+          maxLength: 3
+        price_amount_minor:
+          type: integer
+          minimum: 1
+          description: 套餐价格，单位为分
+        benefits:
+          type: array
+          items: {}
+          description: 会员权益配置列表
+        status:
+          allOf:
+          - $ref: '#/components/schemas/Status216Enum'
+          description: |-
+            套餐状态
+
+            * `DRAFT` - DRAFT
+            * `ACTIVE` - ACTIVE
+            * `PAUSED` - PAUSED
+            * `ENDED` - ENDED
+        sort_order:
+          type: integer
+          minimum: 0
+          description: 展示排序值
+        expected_version:
+          type: integer
+          minimum: 1
+          description: 修改前套餐版本号
     PatchedAdminRoleUpdateRequestRequest:
       type: object
       description: 修改管理员角色。
@@ -15843,8 +17574,13 @@ components:
           description: 支付单 UUID
         order_no:
           type: string
-          format: uuid
-          description: 关联订单 UUID
+          description: 兼容关联业务单号
+        business_type:
+          type: string
+          description: 支付关联业务类型
+        business_no:
+          type: string
+          description: 支付关联业务单号
         payment_method:
           allOf:
           - $ref: '#/components/schemas/PaymentMethodEnum'
@@ -15899,6 +17635,8 @@ components:
           description: 支付单版本号
       required:
       - amount_minor
+      - business_no
+      - business_type
       - client_payload
       - currency
       - expires_at
@@ -18824,6 +20562,20 @@ components:
         * `WEEKDAY` - WEEKDAY
         * `WEEKEND` - WEEKEND
         * `ALL` - ALL
+    ScopeTypeEnum:
+      enum:
+      - ALL
+      - CITY
+      - SERVICE_CATEGORY
+      - SERVICE
+      - PROVIDER
+      type: string
+      description: |-
+        * `ALL` - ALL
+        * `CITY` - CITY
+        * `SERVICE_CATEGORY` - SERVICE_CATEGORY
+        * `SERVICE` - SERVICE
+        * `PROVIDER` - PROVIDER
     SearchMomentGroup:
       type: object
       description: 综合搜索中的动态结果分组。
@@ -19570,6 +21322,18 @@ components:
         * `RSS` - RSS
         * `API` - API
         * `MANUAL` - MANUAL
+    Status216Enum:
+      enum:
+      - DRAFT
+      - ACTIVE
+      - PAUSED
+      - ENDED
+      type: string
+      description: |-
+        * `DRAFT` - DRAFT
+        * `ACTIVE` - ACTIVE
+        * `PAUSED` - PAUSED
+        * `ENDED` - ENDED
     StatusC0eEnum:
       enum:
       - ACTIVE
@@ -20081,6 +21845,14 @@ components:
       - conversation_count
       - items
       - total_unread
+    ValidityTypeEnum:
+      enum:
+      - FIXED_PERIOD
+      - ISSUE_RELATIVE
+      type: string
+      description: |-
+        * `FIXED_PERIOD` - FIXED_PERIOD
+        * `ISSUE_RELATIVE` - ISSUE_RELATIVE
     ViewEnum:
       enum:
       - MONTH

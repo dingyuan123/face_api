@@ -69,6 +69,9 @@ class OrderQuoteView(APIView):
                 slot_id=str(serializer.validated_data["slot_id"]),
                 location_selection_token=serializer.validated_data.get("location_selection_token")
                 or None,
+                coupon_no=str(serializer.validated_data["coupon_no"])
+                if serializer.validated_data.get("coupon_no")
+                else None,
             )
         )
 
@@ -343,6 +346,9 @@ class OrderListCreateView(APIView):
             expected_service_version=serializer.validated_data["expected_service_version"],
             expected_slot_version=serializer.validated_data["expected_slot_version"],
             location_selection_token=serializer.validated_data["location_selection_token"],
+            coupon_no=str(serializer.validated_data["coupon_no"])
+            if serializer.validated_data.get("coupon_no")
+            else None,
             idempotency_key=request.headers.get("Idempotency-Key"),
         )
         if not result.reused:

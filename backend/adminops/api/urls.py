@@ -66,6 +66,8 @@ from backend.adminops.api.views import (
 
 urlpatterns = [
     path("", include("backend.moderation.api.admin_urls")),
+    path("", include("backend.coupons.api.admin_urls")),
+    path("", include("backend.memberships.api.admin_urls")),
     path("", include("backend.support.api.admin_urls")),
     path(
         "analytics/overview/",

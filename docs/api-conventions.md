@@ -479,3 +479,18 @@
 - `[DESIGN]` 创建独立会话并支持 `Idempotency-Key`；重复同键同请求复用令牌，不同请求返回 409 `AUTH_IDEMPOTENCY_CONFLICT`。
 - `[CONFIRM]` 正式密码登录 API 不在当前版本承诺范围内，不能被 App 或生产客户端依赖。
 
+
+## 22. 优惠券和会员接口
+
+- `[PRD]` 优惠券用户端支持查看可用和历史券；会员用户端支持查看会员状态、套餐、购买和续费。
+- `[DESIGN]` 用户接口：
+  - `GET /api/v1/coupons/`、`GET /api/v1/coupons/{coupon_no}/`
+  - `POST /api/v1/coupon-templates/{template_no}/claim/`
+  - `GET /api/v1/membership/`
+  - `GET /api/v1/membership/plans/`
+  - `GET/POST /api/v1/membership/purchases/`
+  - `GET /api/v1/membership/purchases/{purchase_no}/`
+- `[DESIGN]` `GET /api/v1/orders/quotes/` 和 `POST /api/v1/orders/` 可选传 `coupon_no`；报价响应和订单响应返回 `discount_amount_minor/discounts/coupon`，优惠金额只由服务端计算。
+- `[DESIGN]` 管理接口位于 `/admin/v1`，包括 `GET/POST /admin/v1/coupons/templates/`、`PATCH /admin/v1/coupons/templates/{template_no}/`、`POST /admin/v1/coupons/issue/`、`POST /admin/v1/coupons/{coupon_no}/revoke/`、`GET /admin/v1/coupons/redemptions/`、`GET/POST /admin/v1/membership/plans/`、`PATCH /admin/v1/membership/plans/{plan_no}/`、`GET /admin/v1/membership/purchases/`。
+- `[DESIGN]` 管理写操作需要 `admin.coupon.*` 或 `admin.membership.*` 权限、版本号、原因（撤销）和审计；优惠券和会员接口均不接受客户端金额、佣金或有效期。
+- `[DESIGN]` 会员购买支付响应包含支付单和 `NONE/NATIVE_PAY` 动作；会员购买不允许退款，支付回调按 `business_type` 幂等确认订单或会员购买。

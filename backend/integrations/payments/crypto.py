@@ -58,7 +58,11 @@ def _read_key_material(value: str) -> bytes:
     if not normalized:
         raise PaymentGatewayUnavailable("支付密钥未配置")
     candidate = Path(normalized)
-    if candidate.is_file():
+    try:
+        is_file = candidate.is_file()
+    except OSError:
+        is_file = False
+    if is_file:
         return candidate.read_bytes()
     pem_value = normalized.replace("\\n", "\n")
     if pem_value.startswith("-----BEGIN "):

@@ -105,6 +105,7 @@ def quote_order(
     service_id: str,
     slot_id: str,
     location_selection_token: str | None = None,
+    coupon_no: str | None = None,
 ) -> dict[str, Any]:
     """计算下单前金额并返回下单所需服务和时段版本。"""
 
@@ -155,18 +156,49 @@ def quote_order(
         if location_selection_token
         else None
     )
+    discount_amount_minor = 0
+    discounts: list[dict[str, Any]] = []
+    if coupon_no:
+        from backend.coupons.services import (
+            CouponScopeContext,
+            preview_coupon_discount,
+        )
+
+        coupon_preview = preview_coupon_discount(
+            user=user,
+            coupon_no=coupon_no,
+            original_amount_minor=original_amount_minor,
+            currency=service.currency,
+            context=CouponScopeContext(
+                city_code=getattr(getattr(service.provider_user, "profile", None), "city_code", "")
+                or "",
+                category_code=service.category.code,
+                service_public_id=str(service.public_id),
+                provider_public_id=str(service.provider_user.public_id),
+            ),
+            for_update=False,
+        )
+        discount_amount_minor = coupon_preview["discount_amount_minor"]
+        discounts = [
+            {
+                "code": coupon_preview["code"],
+                "name": coupon_preview["name"],
+                "amount_minor": discount_amount_minor,
+            }
+        ]
+    payable_amount_minor = original_amount_minor - discount_amount_minor
     return {
         "pricing_unit": "HOUR",
         "currency": service.currency,
         "hourly_amount_minor": service.price_amount_minor,
         "booking_unit_count": booking_unit_count,
         "original_amount_minor": original_amount_minor,
-        "discount_amount_minor": 0,
+        "discount_amount_minor": discount_amount_minor,
         "platform_fee_amount_minor": 0,
         "platform_commission_amount_minor": _platform_commission_amount(original_amount_minor),
-        "payable_amount_minor": original_amount_minor,
+        "payable_amount_minor": payable_amount_minor,
         "payable_display": format_price_amount(
-            original_amount_minor,
+            payable_amount_minor,
             service.currency,
         ),
         "service_version": service.version,
@@ -180,7 +212,7 @@ def quote_order(
                 "amount_minor": original_amount_minor,
             }
         ],
-        "discounts": [],
+        "discounts": discounts,
         "meeting_location": _selection_location_payload(meeting_location)
         if meeting_location
         else None,
@@ -642,6 +674,8 @@ def order_payload(
 ) -> dict[str, Any]:
     """返回订单和价格快照安全摘要。"""
 
+    from backend.coupons.services import get_coupon_redemption_for_order
+
     effective_viewer = viewer or getattr(request, "user", None) or order.user
     return {
         "order_no": str(order.order_no),
@@ -655,6 +689,7 @@ def order_payload(
         "participants": _order_participants_payload(order, request),
         "contact": _contact_payload(order, effective_viewer),
         "progress": _order_progress_payload(order, effective_viewer),
+        "coupon": get_coupon_redemption_for_order(order_no=str(order.order_no)),
         "price": {
             "currency": order.currency,
             "original_amount_minor": order.original_price_amount_minor,
@@ -685,9 +720,10 @@ def create_order(
     expected_service_version: int,
     expected_slot_version: int,
     location_selection_token: str | None = None,
+    coupon_no: str | None = None,
     idempotency_key: str | None = None,
 ) -> OrderResult:
-    """创建待支付订单并锁定预约时段。"""
+    """创建待支付订单并锁定预约时段和可选优惠券。"""
 
     normalized_key = _normalize_idempotency_key(idempotency_key, "order")
     fingerprint = sensitive_fingerprint(
@@ -699,6 +735,7 @@ def create_order(
             "expected_service_version": expected_service_version,
             "expected_slot_version": expected_slot_version,
             "location_selection_token": location_selection_token or "",
+            "coupon_no": str(coupon_no or ""),
         }
     )
     meeting_location = (
@@ -800,6 +837,34 @@ def create_order(
                     flat=True,
                 )
             )
+            discount_amount_minor = 0
+            coupon_preview = None
+            if coupon_no:
+                from backend.coupons.services import (
+                    CouponScopeContext,
+                    preview_coupon_discount,
+                )
+
+                coupon_preview = preview_coupon_discount(
+                    user=user,
+                    coupon_no=coupon_no,
+                    original_amount_minor=original_amount_minor,
+                    currency=service.currency,
+                    context=CouponScopeContext(
+                        city_code=getattr(
+                            getattr(service.provider_user, "profile", None),
+                            "city_code",
+                            "",
+                        )
+                        or "",
+                        category_code=service.category.code,
+                        service_public_id=str(service.public_id),
+                        provider_public_id=str(service.provider_user.public_id),
+                    ),
+                )
+                coupon_preview.pop("coupon_instance", None)
+                discount_amount_minor = coupon_preview["discount_amount_minor"]
+            payable_amount_minor = original_amount_minor - discount_amount_minor
             order = Order.objects.create(
                 user=user,
                 provider_user=service.provider_user,
@@ -840,8 +905,9 @@ def create_order(
                     "version": anchor_slot.version,
                 },
                 original_price_amount_minor=original_amount_minor,
+                discount_amount_minor=discount_amount_minor,
                 platform_commission_amount_minor=_platform_commission_amount(original_amount_minor),
-                payable_amount_minor=original_amount_minor,
+                payable_amount_minor=payable_amount_minor,
                 note=note.strip(),
                 meeting_location_poi_id=str(meeting_location.get("provider_poi_id", ""))[:255],
                 meeting_location_name=str(meeting_location.get("name", ""))[:200],
@@ -883,6 +949,31 @@ def create_order(
                 status=ScheduleSlot.Status.LOCKED,
                 last_booking_status=ScheduleSlot.LastBookingStatus.LOCKED,
             )
+            if coupon_no:
+                from backend.coupons.services import (
+                    CouponScopeContext,
+                    reserve_coupon_for_order,
+                )
+
+                reserve_coupon_for_order(
+                    user=user,
+                    coupon_no=coupon_no,
+                    order_no=str(order.order_no),
+                    original_amount_minor=original_amount_minor,
+                    currency=service.currency,
+                    context=CouponScopeContext(
+                        city_code=getattr(
+                            getattr(service.provider_user, "profile", None),
+                            "city_code",
+                            "",
+                        )
+                        or "",
+                        category_code=service.category.code,
+                        service_public_id=str(service.public_id),
+                        provider_public_id=str(service.provider_user.public_id),
+                    ),
+                    idempotency_key=f"coupon-reserve:{normalized_key}",
+                )
             _record_event(
                 order=order,
                 event_type=OrderStatusLog.EventType.CREATED,
@@ -1084,6 +1175,12 @@ def _confirm_order_paid(*, order: Order, payment: Payment, actor_user_id: int) -
         actor_user_id=actor_user_id,
     )
     ensure_order_paid_conversation(order_no=str(order.order_no))
+    from backend.coupons.services import consume_coupon_for_order
+
+    consume_coupon_for_order(
+        order_no=str(order.order_no),
+        idempotency_key=f"coupon-used:{payment.payment_no}",
+    )
     create_order_referral_snapshot(order=order)
     record_provider_event(
         provider_user_id=order.provider_user_id,
@@ -1110,6 +1207,13 @@ def _refund_and_release(*, order: Order, actor_user_id: int, reason: str) -> Non
     order.status = Order.Status.REFUNDED if payment else Order.Status.CANCELED
     order.version += 1
     order.save(update_fields=["status", "refunded_amount_minor", "version", "updated_at"])
+    from backend.coupons.services import record_coupon_order_refund
+
+    record_coupon_order_refund(
+        order_no=str(order.order_no),
+        reason=reason or "订单退款，不自动返还优惠券",
+        idempotency_key=f"coupon-order-refund:{order.order_no}",
+    )
     if payment:
         apply_refund_to_referral_reward(
             order=order,
@@ -1175,6 +1279,13 @@ def cancel_order(
             order.status = Order.Status.CANCELED
             order.version += 1
             order.save(update_fields=["status", "version", "updated_at"])
+            from backend.coupons.services import release_coupon_for_order
+
+            release_coupon_for_order(
+                order_no=str(order.order_no),
+                reason="订单未支付取消，释放优惠券",
+                idempotency_key=f"coupon-release:{order.order_no}",
+            )
             _record_event(
                 order=order,
                 event_type=OrderStatusLog.EventType.CANCELED,
@@ -1738,6 +1849,13 @@ def apply_order_refund_result(*, refund: Refund) -> None:
                             actor_user_id=refund_request.reviewed_by_user_id,
                             reason=refund_request.review_note,
                         )
+                    from backend.coupons.services import record_coupon_order_refund
+
+                    record_coupon_order_refund(
+                        order_no=str(order.order_no),
+                        reason=refund_request.review_note or "订单退款，不自动返还优惠券",
+                        idempotency_key=f"coupon-order-refund:{refund.refund_no}",
+                    )
                     apply_refund_to_referral_reward(
                         order=order,
                         refund_no=str(refund.refund_no),

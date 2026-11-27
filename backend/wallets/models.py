@@ -65,6 +65,7 @@ class WalletTransaction(models.Model):
     class TransactionType(models.TextChoices):
         TOPUP = "TOPUP", "测试充值"
         ORDER_PAYMENT = "ORDER_PAYMENT", "订单支付"
+        MEMBERSHIP_PURCHASE = "MEMBERSHIP_PURCHASE", "会员购买"
         ORDER_REFUND = "ORDER_REFUND", "订单退款"
         ADJUSTMENT = "ADJUSTMENT", "人工调整"
 

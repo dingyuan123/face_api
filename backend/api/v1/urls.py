@@ -45,6 +45,8 @@ urlpatterns = [
     path("", include("backend.moderation.api.user_urls")),
     path("", include("backend.support.api.user_urls")),
     path("", include("backend.referrals.api.urls")),
+    path("", include("backend.coupons.api.urls")),
+    path("", include("backend.memberships.api.urls")),
     path("", include("backend.reviews.api.urls")),
     path("", include("backend.payouts.api.urls")),
     path("", include("backend.providers.api.profile_urls")),

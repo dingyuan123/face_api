@@ -8,12 +8,16 @@ from django.db import models
 
 
 class Payment(models.Model):
-    """订单支付单，支持钱包余额、微信 App 支付和支付宝 App 支付。"""
+    """订单、会员购买等业务支付单，支持钱包余额、微信 App 支付和支付宝 App 支付。"""
 
     class Method(models.TextChoices):
         BALANCE = "BALANCE", "钱包余额"
         WECHAT_APP = "WECHAT_APP", "微信 App 支付"
         ALIPAY_APP = "ALIPAY_APP", "支付宝 App 支付"
+
+    class BusinessType(models.TextChoices):
+        ORDER = "ORDER", "预约订单"
+        MEMBERSHIP_PURCHASE = "MEMBERSHIP_PURCHASE", "会员购买"
 
     class Status(models.TextChoices):
         PENDING = "PENDING", "待支付"
@@ -35,7 +39,22 @@ class Payment(models.Model):
         related_name="payments",
         db_comment="付款用户",
     )
-    order_no = models.CharField(max_length=64, db_comment="关联订单业务单号")
+    order_no = models.CharField(
+        max_length=64,
+        db_comment="兼容字段：订单号或会员购买单号；新代码以 business_type 和 business_no 为准",
+    )
+    business_type = models.CharField(
+        max_length=32,
+        choices=BusinessType.choices,
+        default=BusinessType.ORDER,
+        db_comment="支付关联业务类型：预约订单或会员购买",
+    )
+    business_no = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_comment="支付关联业务单号；订单为 order_no，会员购买为 purchase_no",
+    )
     payment_method = models.CharField(
         max_length=32,
         choices=Method.choices,
@@ -98,7 +117,7 @@ class Payment(models.Model):
 
     class Meta:
         db_table = "payments"
-        db_table_comment = "订单支付单表"
+        db_table_comment = "预约订单和会员购买业务支付单表"
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=["user", "idempotency_key"],
@@ -108,6 +127,11 @@ class Payment(models.Model):
                 fields=["order_no", "status"],
                 condition=models.Q(status="SUCCESS"),
                 name="uniq_payment_successful_order",
+            ),
+            models.UniqueConstraint(
+                fields=["business_type", "business_no", "status"],
+                condition=models.Q(status="SUCCESS") & ~models.Q(business_no=""),
+                name="uniq_payment_successful_business",
             ),
             models.UniqueConstraint(
                 fields=["payment_channel", "channel_transaction_no"],
@@ -122,6 +146,7 @@ class Payment(models.Model):
         indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["user", "created_at"]),
             models.Index(fields=["order_no", "status"]),
+            models.Index(fields=["business_type", "business_no", "status"]),
         ]
 
 
@@ -157,7 +182,7 @@ class Refund(models.Model):
         related_name="refunds",
         db_comment="退款收款用户",
     )
-    order_no = models.CharField(max_length=64, db_comment="关联订单业务单号")
+    order_no = models.CharField(max_length=64, db_comment="关联预约订单业务单号")
     refund_method = models.CharField(
         max_length=32,
         choices=Method.choices,

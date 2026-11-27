@@ -246,3 +246,14 @@
 - `[DESIGN]` 证件媒体仍保存在 `media_assets`，业务表只保存媒体 UUID；后续对象存储、访问签名和删除策略由媒体模块统一管理。
 - `[DESIGN]` `provider_applications` 新增紧急联系人姓名密文、手机号密文和脱敏手机号；不保存完整手机号明文，接口和日志只使用脱敏展示值。
 
+
+## 16. 优惠券和会员数据
+
+- `[DESIGN]` `coupon_templates` 保存固定金额、门槛、适用范围、有效期类型、发放限额和模板状态；模板规则变化不覆盖历史用户券。
+- `[DESIGN]` `coupon_instances` 保存用户券实例、来源幂等键、有效期和领取时模板快照；`coupon_redemptions` 保存订单锁定、核销、释放和金额快照，同一订单或同一券不能重复存在活动核销。
+- `[DESIGN]` `coupon_status_logs` 追加式记录领取、锁定、核销、释放、过期、撤销和订单退款影响，不物理删除历史。
+- `[DESIGN]` `membership_plans` 和 `membership_plan_versions` 保存套餐当前配置与不可变价格/时长/权益版本，购买单引用版本快照。
+- `[DESIGN]` `membership_purchases` 保存会员购买幂等、支付业务单号和金额；`membership_periods` 保存购买后的有效期周期，`membership_accounts` 只作为当前到期时间和续费并发锁。
+- `[DESIGN]` `membership_benefit_grants` 保存权益发放结果，包括会员券实例引用和未成功发放原因；`membership_status_logs` 保存购买、支付、生效、续费顺延和到期审计。
+- `[DESIGN]` `payments` 新增 `business_type/business_no`，兼容既有 `order_no`；成功支付按业务主体唯一，会员购买支付禁止退款。
+- `[DESIGN]` 金额字段继续使用 `BIGINT` 最小货币单位；所有新增表和字段必须有中文表备注、列备注、唯一约束和必要索引。

@@ -138,6 +138,27 @@ from backend.content.news_models import (
     NewsSource,
     NewsSyncRun,
 )
+from backend.coupons.api.serializers import (
+    AdminCouponIssueRequestSerializer,
+    AdminCouponIssueResponseSerializer,
+    AdminCouponRevokeRequestSerializer,
+    AdminCouponTemplateCreateRequestSerializer,
+    AdminCouponTemplateListResponseSerializer,
+    AdminCouponTemplateResponseSerializer,
+    AdminCouponTemplateUpdateRequestSerializer,
+    CouponClaimRequestSerializer,
+    CouponClaimResponseSerializer,
+    CouponListResponseSerializer,
+    CouponRedemptionListResponseSerializer,
+    CouponRedemptionResponseSerializer,
+    CouponResponseSerializer,
+)
+from backend.coupons.models import (
+    CouponInstance,
+    CouponRedemption,
+    CouponStatusLog,
+    CouponTemplate,
+)
 from backend.discovery.api.serializers import (
     AdminTrendingCreateResponseSerializer,
     AdminTrendingCreateSerializer,
@@ -187,6 +208,30 @@ from backend.media.api.serializers import (
     MediaUploadRequestSerializer,
 )
 from backend.media.models import MediaAsset
+from backend.memberships.api.serializers import (
+    AdminMembershipPlanCreateRequestSerializer,
+    AdminMembershipPlanUpdateRequestSerializer,
+    AdminMembershipPurchaseListResponseSerializer,
+    MembershipBenefitResponseSerializer,
+    MembershipPaymentResponseSerializer,
+    MembershipPeriodResponseSerializer,
+    MembershipPlanListResponseSerializer,
+    MembershipPlanResponseSerializer,
+    MembershipPurchaseCreateRequestSerializer,
+    MembershipPurchaseListResponseSerializer,
+    MembershipPurchaseResponseSerializer,
+    MembershipPurchaseResultSerializer,
+    MembershipSummaryResponseSerializer,
+)
+from backend.memberships.models import (
+    MembershipAccount,
+    MembershipBenefitGrant,
+    MembershipPeriod,
+    MembershipPlan,
+    MembershipPlanVersion,
+    MembershipPurchase,
+    MembershipStatusLog,
+)
 from backend.messaging.api.serializers import (
     ChatOrderSummarySerializer,
     ChatUserSummarySerializer,
@@ -213,6 +258,7 @@ from backend.messaging.models import (
 from backend.orders.api.serializers import (
     OrderActionRequestSerializer,
     OrderContactSerializer,
+    OrderCouponResponseSerializer,
     OrderCreateRequestSerializer,
     OrderCustomerParticipantSerializer,
     OrderMeetingLocationSerializer,
@@ -401,6 +447,8 @@ BUSINESS_MODULES = [
     "backend/content/tasks.py",
     "backend/wallets/services.py",
     "backend/payments/services.py",
+    "backend/coupons/services.py",
+    "backend/memberships/services.py",
     "backend/social/services.py",
     "backend/scheduling/services.py",
     "backend/orders/services.py",
@@ -499,6 +547,17 @@ MODEL_CLASSES = [
     EarningTransaction,
     Withdrawal,
     WithdrawalStatusLog,
+    CouponTemplate,
+    CouponInstance,
+    CouponRedemption,
+    CouponStatusLog,
+    MembershipPlan,
+    MembershipPlanVersion,
+    MembershipAccount,
+    MembershipPurchase,
+    MembershipPeriod,
+    MembershipBenefitGrant,
+    MembershipStatusLog,
 ]
 SERIALIZER_CLASSES = [
     AccountSecurityResponseSerializer,
@@ -660,6 +719,33 @@ SERIALIZER_CLASSES = [
     OrderResponseSerializer,
     OrderServiceResponseSerializer,
     OrderSummaryResponseSerializer,
+    OrderCouponResponseSerializer,
+    CouponResponseSerializer,
+    CouponListResponseSerializer,
+    CouponClaimRequestSerializer,
+    CouponClaimResponseSerializer,
+    CouponRedemptionResponseSerializer,
+    CouponRedemptionListResponseSerializer,
+    AdminCouponTemplateResponseSerializer,
+    AdminCouponTemplateListResponseSerializer,
+    AdminCouponTemplateCreateRequestSerializer,
+    AdminCouponTemplateUpdateRequestSerializer,
+    AdminCouponIssueRequestSerializer,
+    AdminCouponIssueResponseSerializer,
+    AdminCouponRevokeRequestSerializer,
+    MembershipPlanResponseSerializer,
+    MembershipPlanListResponseSerializer,
+    MembershipBenefitResponseSerializer,
+    MembershipPeriodResponseSerializer,
+    MembershipSummaryResponseSerializer,
+    MembershipPurchaseCreateRequestSerializer,
+    MembershipPaymentResponseSerializer,
+    MembershipPurchaseResponseSerializer,
+    MembershipPurchaseResultSerializer,
+    MembershipPurchaseListResponseSerializer,
+    AdminMembershipPlanCreateRequestSerializer,
+    AdminMembershipPlanUpdateRequestSerializer,
+    AdminMembershipPurchaseListResponseSerializer,
     ScheduleSlotCreateSerializer,
     ScheduleSlotDeleteSerializer,
     ScheduleSlotDeleteResponseSerializer,
@@ -883,3 +969,38 @@ def test_location_search_openapi_documents_query_and_response_contracts() -> Non
     assert "listHomeFeedWithLocation" in schema
     assert "selection_token:" in schema
     assert "meeting_location:" in schema
+
+
+def test_coupon_and_membership_openapi_documents_contracts() -> None:
+    schema = (PROJECT_ROOT / "openapi.yaml").read_text(encoding="utf-8")
+    for endpoint in (
+        "/api/v1/coupons/:",
+        "/api/v1/coupons/{coupon_no}/:",
+        "/api/v1/coupon-templates/{template_no}/claim/:",
+        "/api/v1/membership/:",
+        "/api/v1/membership/plans/:",
+        "/api/v1/membership/purchases/:",
+        "/api/v1/membership/purchases/{purchase_no}/:",
+        "/admin/v1/coupons/templates/:",
+        "/admin/v1/coupons/issue/:",
+        "/admin/v1/coupons/redemptions/:",
+        "/admin/v1/membership/plans/:",
+        "/admin/v1/membership/purchases/:",
+    ):
+        assert endpoint in schema
+    for response_model in (
+        "CouponResponse:",
+        "CouponListResponse:",
+        "CouponClaimResponse:",
+        "CouponRedemptionListResponse:",
+        "AdminCouponTemplateResponse:",
+        "MembershipPlanResponse:",
+        "MembershipSummaryResponse:",
+        "MembershipPurchaseResponse:",
+        "MembershipPurchaseResult:",
+    ):
+        assert response_model in schema
+    contract = schema.split("/api/v1/orders/quotes/:", 1)[1]
+    assert "coupon_no:" in contract
+    assert "discount_amount_minor:" in contract
+    assert "$ref: '#/components/schemas/OrderCouponResponse'" in schema

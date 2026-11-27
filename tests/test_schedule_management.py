@@ -312,6 +312,7 @@ def test_public_availability_returns_only_booking_fields() -> None:
         reverse("v1:provider-availability", args=[user.public_id]),
         {
             "service_id": str(service.public_id),
+            "date": today.isoformat(),
             "timezone": "Asia/Shanghai",
         },
     )

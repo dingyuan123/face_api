@@ -27,6 +27,11 @@ class OrderCreateRequestSerializer(serializers.Serializer):
     location_selection_token = serializers.CharField(
         help_text="地点搜索接口返回的短期地点选择凭证；订单只接受已过滤公共场所",
     )
+    coupon_no = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="可选用户优惠券 UUID；金额和服务端优惠金额由后端重新计算",
+    )
 
 
 class OrderQuoteRequestSerializer(serializers.Serializer):
@@ -38,6 +43,11 @@ class OrderQuoteRequestSerializer(serializers.Serializer):
         required=False,
         allow_blank=True,
         help_text="可选的地点选择凭证，用于报价确认地点摘要",
+    )
+    coupon_no = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="可选用户优惠券 UUID，用于试算服务端可享受的订单优惠",
     )
 
 
@@ -76,6 +86,24 @@ class OrderQuoteDiscountSerializer(serializers.Serializer):
     amount_minor = serializers.IntegerField(help_text="优惠金额，单位为币种最小单位")
 
 
+class OrderCouponResponseSerializer(serializers.Serializer):
+    """订单优惠券锁定或核销摘要。"""
+
+    redemption_no = serializers.UUIDField(help_text="优惠券核销记录 UUID")
+    coupon_no = serializers.UUIDField(help_text="用户优惠券 UUID")
+    coupon_name = serializers.CharField(help_text="优惠券展示名称")
+    order_no = serializers.CharField(help_text="关联订单业务 UUID")
+    status = serializers.CharField(help_text="优惠券核销状态")
+    status_text = serializers.CharField(help_text="优惠券核销状态中文含义")
+    currency = serializers.CharField(help_text="金额币种")
+    original_amount_minor = serializers.IntegerField(help_text="优惠前订单原价，单位为分")
+    discount_amount_minor = serializers.IntegerField(help_text="优惠金额，单位为分")
+    payable_amount_minor = serializers.IntegerField(help_text="优惠后应付金额，单位为分")
+    reserved_at = serializers.DateTimeField(help_text="订单创建锁定优惠券时间")
+    used_at = serializers.DateTimeField(allow_null=True, help_text="支付成功核销时间")
+    released_at = serializers.DateTimeField(allow_null=True, help_text="订单取消释放时间")
+
+
 class OrderQuoteResponseSerializer(serializers.Serializer):
     """下单前金额试算响应。"""
 
@@ -85,7 +113,7 @@ class OrderQuoteResponseSerializer(serializers.Serializer):
     booking_unit_count = serializers.IntegerField(help_text="预约小时数量")
     original_amount_minor = serializers.IntegerField(help_text="优惠前服务原价，单位为币种最小单位")
     discount_amount_minor = serializers.IntegerField(
-        help_text="优惠总额，当前为 0，单位为币种最小单位"
+        help_text="优惠总额，由服务端按优惠券规则计算，单位为币种最小单位"
     )
     platform_fee_amount_minor = serializers.IntegerField(
         help_text="平台服务费，当前为 0，单位为币种最小单位"
@@ -272,6 +300,10 @@ class OrderResponseSerializer(serializers.Serializer):
     contact = OrderContactSerializer(help_text="当前登录者联系对方的信息")
     progress = OrderProgressSerializer(help_text="订单进度和下一步操作")
     price = OrderPriceSerializer(help_text="订单价格快照")
+    coupon = OrderCouponResponseSerializer(
+        allow_null=True,
+        help_text="订单优惠券锁定、核销或释放摘要；未使用优惠券时为空",
+    )
     note = serializers.CharField(help_text="预约备注")
     reject_reason = serializers.CharField(help_text="拒绝原因")
     version = serializers.IntegerField(help_text="订单版本号")
@@ -293,7 +325,9 @@ class PaymentResponseSerializer(serializers.Serializer):
     """订单支付单和原生支付 SDK 参数。"""
 
     payment_no = serializers.UUIDField(help_text="支付单 UUID")
-    order_no = serializers.UUIDField(help_text="关联订单 UUID")
+    order_no = serializers.CharField(help_text="兼容关联业务单号")
+    business_type = serializers.CharField(help_text="支付关联业务类型")
+    business_no = serializers.CharField(help_text="支付关联业务单号")
     payment_method = serializers.ChoiceField(
         choices=["BALANCE", "WECHAT_APP", "ALIPAY_APP"],
         help_text="支付方式",

@@ -53,6 +53,8 @@ def payment_payload(payment: Payment) -> dict[str, Any]:
     return {
         "payment_no": str(payment.payment_no),
         "order_no": payment.order_no,
+        "business_type": payment.business_type,
+        "business_no": payment.business_no,
         "payment_method": payment.payment_method,
         "payment_method_text": enum_label(Payment.Method, payment.payment_method),
         "payment_channel": payment.payment_channel,
@@ -73,11 +75,20 @@ def charge_wallet_for_order(
     order_no: str,
     amount_minor: int,
     idempotency_key: str | None = None,
+    business_type: str = Payment.BusinessType.ORDER,
+    business_no: str | None = None,
 ) -> PaymentChargeResult:
-    """同步执行钱包余额支付并落支付单，重复请求返回原支付单。"""
+    """同步执行钱包余额业务支付并落支付单，重复请求返回原支付单。"""
     normalized_key = _normalize_idempotency_key(idempotency_key, "payment")
+    effective_business_no = business_no or order_no
     fingerprint = sensitive_fingerprint(
-        {"order_no": order_no, "amount_minor": amount_minor, "payment_method": "BALANCE"}
+        {
+            "business_type": business_type,
+            "business_no": effective_business_no,
+            "order_no": order_no,
+            "amount_minor": amount_minor,
+            "payment_method": "BALANCE",
+        }
     )
     try:
         with transaction.atomic():
@@ -88,15 +99,25 @@ def charge_wallet_for_order(
             _account, _ = debit_wallet(
                 user=user,
                 amount_minor=amount_minor,
-                transaction_type=WalletTransaction.TransactionType.ORDER_PAYMENT,
-                business_type="ORDER_PAYMENT",
-                business_no=order_no,
+                transaction_type=(
+                    WalletTransaction.TransactionType.ORDER_PAYMENT
+                    if business_type == Payment.BusinessType.ORDER
+                    else WalletTransaction.TransactionType.MEMBERSHIP_PURCHASE
+                ),
+                business_type=(
+                    "ORDER_PAYMENT"
+                    if business_type == Payment.BusinessType.ORDER
+                    else "MEMBERSHIP_PURCHASE"
+                ),
+                business_no=effective_business_no,
                 idempotency_key=normalized_key,
                 request_fingerprint=fingerprint,
             )
             payment = Payment.objects.create(
                 user=user,
                 order_no=order_no,
+                business_type=business_type,
+                business_no=effective_business_no,
                 amount_minor=amount_minor,
                 status=Payment.Status.SUCCESS,
                 paid_at=timezone.now(),
@@ -123,6 +144,8 @@ def create_external_payment(
     payment_method: str,
     description: str,
     idempotency_key: str | None = None,
+    business_type: str = Payment.BusinessType.ORDER,
+    business_no: str | None = None,
 ) -> PaymentChargeResult:
     """创建微信或支付宝 App 支付单，提交事务后再安全调用外部渠道。"""
     if payment_method not in {
@@ -135,8 +158,11 @@ def create_external_payment(
             status_code=400,
         )
     normalized_key = _normalize_idempotency_key(idempotency_key, "external-payment")
+    effective_business_no = business_no or order_no
     fingerprint = sensitive_fingerprint(
         {
+            "business_type": business_type,
+            "business_no": effective_business_no,
             "order_no": order_no,
             "amount_minor": amount_minor,
             "payment_method": payment_method,
@@ -155,6 +181,8 @@ def create_external_payment(
                 payment = Payment.objects.create(
                     user=user,
                     order_no=order_no,
+                    business_type=business_type,
+                    business_no=effective_business_no,
                     payment_method=payment_method,
                     payment_channel=channel,
                     amount_minor=amount_minor,
@@ -303,9 +331,14 @@ def handle_payment_notification(
                 "updated_at",
             ]
         )
-        from backend.orders.services import confirm_order_payment
+        if payment.business_type == Payment.BusinessType.MEMBERSHIP_PURCHASE:
+            from backend.memberships.services import confirm_membership_payment
 
-        confirm_order_payment(payment=payment)
+            confirm_membership_payment(payment=payment)
+        else:
+            from backend.orders.services import confirm_order_payment
+
+            confirm_order_payment(payment=payment)
         return payment
 
 
@@ -341,6 +374,7 @@ def handle_refund_notification(
                 ERROR_MESSAGES[ErrorCode.PAYMENT_NOT_FOUND],
                 status_code=404,
             )
+        _require_order_payment(refund.payment)
         try:
             notification_payment_uuid = uuid.UUID(notification.out_trade_no)
         except ValueError as exc:
@@ -417,6 +451,7 @@ def refund_payment(
     idempotency_key: str | None = None,
 ) -> Refund:
     """按支付单原渠道退款，余额支付入账，外部支付由适配器受理。"""
+    _require_order_payment(payment)
     normalized_key = _normalize_idempotency_key(idempotency_key, "refund")
     existing = Refund.objects.filter(
         payment=payment,
@@ -441,6 +476,16 @@ def refund_payment(
     return executed
 
 
+def _require_order_payment(payment: Payment) -> None:
+    """禁止对会员购买等非预约订单支付单发起退款。"""
+    if payment.business_type != Payment.BusinessType.ORDER:
+        raise ApiError(
+            ErrorCode.PAYMENT_REFUND_NOT_ALLOWED,
+            ERROR_MESSAGES[ErrorCode.PAYMENT_REFUND_NOT_ALLOWED],
+            status_code=409,
+        )
+
+
 def register_refund(
     *,
     payment: Payment,
@@ -448,6 +493,7 @@ def register_refund(
     idempotency_key: str,
 ) -> Refund:
     """只登记退款单，不在数据库事务内调用外部退款渠道。"""
+    _require_order_payment(payment)
     existing = Refund.objects.filter(
         payment=payment,
         idempotency_key=idempotency_key,
@@ -507,6 +553,7 @@ def register_refund(
 
 def execute_refund(refund: Refund) -> Refund:
     """执行已经登记的退款，不在数据库事务或行锁内访问外部支付网络。"""
+    _require_order_payment(refund.payment)
     if refund.status == Refund.Status.SUCCESS:
         return refund
     if refund.payment.payment_method == Payment.Method.BALANCE:

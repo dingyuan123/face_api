@@ -70,6 +70,8 @@ INSTALLED_APPS = [
     "backend.legal",
     "backend.messaging",
     "backend.referrals",
+    "backend.coupons",
+    "backend.memberships",
     "backend.adminops",
     "backend.moderation",
     "backend.support",
